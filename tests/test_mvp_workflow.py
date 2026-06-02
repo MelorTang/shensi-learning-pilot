@@ -236,7 +236,13 @@ def test_external_analysis_math_verifier_overrides_bad_llm_verdict(tmp_path):
                 "provider": "hermes",
                 "model": "mimo-v2.5",
                 "title": "Grade 8 algebra check",
-                "concepts": ["linear function", "linear system", "slope", "ratio equation"],
+                "concepts": [
+                    "linear function",
+                    "linear system",
+                    "slope",
+                    "ratio equation",
+                    "like terms",
+                ],
                 "error_types": ["calculation_error"],
                 "root_cause": "The model should be checked by deterministic math verification.",
                 "severity": 3,
@@ -264,6 +270,11 @@ def test_external_analysis_math_verifier_overrides_bad_llm_verdict(tmp_path):
                         "student_answer": "x=3",
                         "is_correct": True,
                     },
+                    {
+                        "question": "Simplify: 4x + 3 - x + 5",
+                        "student_answer": "3x+7",
+                        "is_correct": True,
+                    },
                 ],
                 "student_answer": "Q1 y=8; Q2 x=4,y=5; Q3 k=-2",
                 "correct_answer": "",
@@ -288,14 +299,20 @@ def test_external_analysis_math_verifier_overrides_bad_llm_verdict(tmp_path):
     assert questions[3]["is_correct"] is False
     assert questions[3]["correct_answer"] == "x=2"
     assert questions[3]["verification"]["method"] == "ratio_equation_cross_multiply"
-    assert body["analysis"]["math_verification"]["verified_count"] == 4
-    assert body["analysis"]["math_verification"]["conflict_count"] == 2
+    assert questions[4]["llm_is_correct"] is True
+    assert questions[4]["is_correct"] is False
+    assert questions[4]["correct_answer"] == "3x+8"
+    assert questions[4]["verification"]["method"] == "linear_simplification"
+    assert body["analysis"]["math_verification"]["verified_count"] == 5
+    assert body["analysis"]["math_verification"]["conflict_count"] == 3
 
     note = Path(body["confirmation"]["note_path"]).read_text(encoding="utf-8")
     assert "linear_system_substitution" in note
     assert "ratio_equation_cross_multiply" in note
+    assert "linear_simplification" in note
     assert "overrode LLM verdict" in note
     assert "x=4, y=6" in note
+    assert "3x+8" in note
 
 
 def test_feishu_webhook_image_payload_without_credentials_uses_stub(tmp_path):

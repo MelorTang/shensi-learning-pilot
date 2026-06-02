@@ -92,6 +92,7 @@ class MathVerificationService:
             self._verify_function_substitution,
             self._verify_linear_system,
             self._verify_ratio_equation,
+            self._verify_linear_simplification,
             self._verify_one_variable_equation,
         ):
             result = verifier(question, answer_text)
@@ -275,6 +276,43 @@ class MathVerificationService:
             ],
         )
 
+    def _verify_linear_simplification(self, question: str, answer_text: str) -> dict[str, Any]:
+        if "=" in question or "x" not in question:
+            return self._unsupported()
+        if not self._looks_like_simplification(question):
+            return self._unsupported()
+        expression_text = self._extract_expression_text(question)
+        student_text = self._extract_student_expression(answer_text)
+        if not expression_text or not student_text:
+            return self._unsupported()
+        try:
+            expected = self._parse_linear_expr(expression_text, variables=("x",))
+            actual = self._parse_linear_expr(student_text, variables=("x",))
+        except ValueError:
+            return self._parse_failed("linear_simplification")
+
+        is_correct = self._linear_expr_equal(expected, actual)
+        expected_text = self._linear_expr_to_text(expected)
+        actual_text = self._linear_expr_to_text(actual)
+        return self._verified(
+            method="linear_simplification",
+            is_correct=is_correct,
+            correct_answer=expected_text,
+            reason=(
+                ""
+                if is_correct
+                else f"Simplifying gives {expected_text}, not {actual_text}."
+            ),
+            checks=[
+                {
+                    "expression": expression_text,
+                    "expected": expected_text,
+                    "student": actual_text,
+                    "passed": is_correct,
+                }
+            ],
+        )
+
     def _verify_one_variable_equation(self, question: str, answer_text: str) -> dict[str, Any]:
         if question.count("=") != 1 or "x" not in question:
             return self._unsupported()
@@ -347,6 +385,60 @@ class MathVerificationService:
         if coefficient == 0:
             raise ValueError("equation has no x coefficient")
         return -equation.constant / coefficient
+
+    def _looks_like_simplification(self, text: str) -> bool:
+        lower = text.lower()
+        keywords = (
+            "simplify",
+            "combine",
+            "like terms",
+            "化简",
+            "合并",
+            "同类项",
+        )
+        return any(keyword in lower for keyword in keywords)
+
+    def _extract_expression_text(self, text: str) -> str:
+        normalized = self._normalize_text(text)
+        if ":" in normalized:
+            normalized = normalized.split(":", 1)[1]
+        leading_expression = re.search(r"([xyk]\b|[+-]?\d|\()", normalized)
+        if leading_expression:
+            normalized = normalized[leading_expression.start() :]
+        return self._strip_trailing_prompt_text(normalized)
+
+    def _extract_student_expression(self, text: str) -> str:
+        normalized = self._normalize_text(text)
+        for line in normalized.splitlines():
+            candidate = line.strip()
+            if not candidate:
+                continue
+            if "=" in candidate:
+                left, right = candidate.split("=", 1)
+                if len(right.strip()) >= len(left.strip()):
+                    candidate = right.strip()
+            return self._strip_trailing_prompt_text(candidate)
+        return ""
+
+    def _strip_trailing_prompt_text(self, text: str) -> str:
+        allowed = set("0123456789xyk+-*/(). ")
+        chars: list[str] = []
+        for char in text:
+            if char in allowed:
+                chars.append(char)
+                continue
+            if chars:
+                break
+        return "".join(chars).strip()
+
+    def _linear_expr_equal(self, first: LinearExpr, second: LinearExpr) -> bool:
+        variables = set(first.coefficients) | set(second.coefficients)
+        coefficients_equal = all(
+            first.coefficients.get(variable, Fraction(0))
+            == second.coefficients.get(variable, Fraction(0))
+            for variable in variables
+        )
+        return coefficients_equal and first.constant == second.constant
 
     def _answer_text(self, item: dict[str, Any]) -> str:
         parts = [str(item.get("student_answer") or "")]
