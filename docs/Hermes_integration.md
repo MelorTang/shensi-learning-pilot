@@ -7,18 +7,30 @@ Hermes Agent is the recommended Feishu entry point for this MVP.
 ```text
 Parent in Feishu
 -> Hermes Feishu Gateway
--> Shensi FastAPI controlled API
+-> controlled wrapper script, e.g. shensi-antigravity-submit
+-> Antigravity/Gemini vision JSON
+-> Shensi FastAPI deterministic verification
+-> parent confirmation
 -> SQLite + Obsidian
 ```
 
-Hermes should not write the Obsidian vault or SQLite database directly. It should call Shensi APIs so that deduplication, confirmation state, review scheduling, and reports stay consistent.
+Hermes should stay a thin Feishu gateway and command router. It does not need a
+strong LLM for the production path if it only calls fixed wrapper scripts and
+posts their result back to Feishu. The heavier image reading and first-pass
+analysis can be delegated to Antigravity/Gemini through a controlled wrapper
+such as `/home/admin/bin/shensi-antigravity-submit`.
+
+Hermes should not write the Obsidian vault or SQLite database directly. It
+should call Shensi APIs so that deduplication, confirmation state, review
+scheduling, and reports stay consistent.
 
 ## Preferred Flow: Vision Analysis First
 
-When Hermes can read the Feishu image with a multimodal model, it should extract
-the visible homework content into structured JSON first and then submit that JSON
-to Shensi. Shensi will run deterministic verification for supported algebra
-items after ingest.
+When Hermes receives a Feishu image, the preferred cloud flow is to pass the
+cached image path to `shensi-antigravity-submit`. The wrapper should call
+Antigravity/Gemini to extract the visible homework content into structured JSON,
+then submit that JSON to Shensi. Shensi will run deterministic verification for
+supported algebra items after ingest.
 
 ```text
 POST http://127.0.0.1:8000/ingest/mistake-analysis

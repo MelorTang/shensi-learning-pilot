@@ -97,6 +97,7 @@ class MathVerificationService:
     def verify_item(self, item: dict[str, Any]) -> dict[str, Any]:
         question = self._normalize_text(str(item.get("question") or ""))
         answer_text = self._answer_text(item)
+        first_parse_failed: dict[str, Any] | None = None
 
         for verifier in (
             self._verify_slope,
@@ -108,8 +109,16 @@ class MathVerificationService:
             self._verify_one_variable_equation,
         ):
             result = verifier(question, answer_text)
+            if result["status"] == "verified":
+                return result
+            if result["status"] == "parse_failed" and first_parse_failed is None:
+                first_parse_failed = result
+                continue
             if result["status"] != "unsupported":
                 return result
+
+        if first_parse_failed is not None:
+            return first_parse_failed
 
         return {
             "status": "unsupported",
@@ -223,8 +232,8 @@ class MathVerificationService:
     def _verify_function_substitution(self, question: str, answer_text: str) -> dict[str, Any]:
         if "y" not in question or "x" not in question:
             return self._unsupported()
-        equation = re.search(r"y=([^,，;；]+)", question)
-        x_match = re.search(r"x=([+-]?\d+(?:/\d+)?(?:\.\d+)?)", question)
+        equation = re.search(r"y\s*=\s*([^,，;；]+)", question)
+        x_match = re.search(r"x\s*=\s*([+-]?\d+(?:/\d+)?(?:\.\d+)?)", question)
         if not equation or not x_match:
             return self._unsupported()
         try:

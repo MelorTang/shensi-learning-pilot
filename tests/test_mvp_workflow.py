@@ -250,9 +250,9 @@ def test_external_analysis_math_verifier_overrides_bad_llm_verdict(tmp_path):
                 "confidence": 0.95,
                 "question_items": [
                     {
-                        "question": "Given y=-3x+2, find y when x=-2",
-                        "student_answer": "y=8",
-                        "student_steps": ["y=-3*(-2)+2", "y=6+2", "y=8"],
+                        "question": "已知一次函数 y = -3x + 2，求当 x = -2 时 y 的值。",
+                        "student_answer": "y = 8",
+                        "student_steps": ["y = -3 × (-2) + 2", "y = 6 + 2", "y = 8"],
                         "is_correct": True,
                     },
                     {

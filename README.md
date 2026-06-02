@@ -107,10 +107,20 @@ Invoke-RestMethod `
 
 See [docs/Hermes_integration.md](docs/Hermes_integration.md) for the Hermes instruction draft.
 
-For real Feishu homework images, Hermes should verify each answer before
-submission and send per-question fields in `analysis.question_items`. This lets
-Obsidian cards show every question, student steps, verdict, correct answer, and
-error reason instead of a flat summary.
+For real Feishu homework images, the recommended cloud path is:
+
+```text
+Feishu -> Hermes -> shensi-antigravity-submit -> Antigravity/Gemini vision JSON
+-> Shensi deterministic verification -> parent confirmation -> SQLite/Obsidian
+```
+
+Hermes can use a cheap routing model in this path because it only needs to call
+fixed wrapper scripts and paste the result back into Feishu. It should not make
+the grading decision itself, and it should not write SQLite or Obsidian
+directly. The wrapper should send per-question fields in
+`analysis.question_items`, which lets Obsidian cards show every question,
+student steps, verdict, correct answer, and error reason instead of a flat
+summary.
 
 Shensi now also runs a deterministic math verification layer after Hermes
 submits extracted JSON. The current MVP verifier covers common junior-high
@@ -119,7 +129,7 @@ algebra items:
 - one-variable linear equations, including simple distributive parentheses like `3(x-2)=12`
 - ratio equations that stay linear after cross multiplication, such as `x/3=4/6`
 - linear simplification and like-term collection, such as `4x+3-x+5`
-- linear function substitution such as `y=-3x+2` with a given `x`
+- linear function substitution such as `y=-3x+2` or `y = -3x + 2` with a given `x`
 - two-variable linear systems such as `x+y=10, 2x-y=2`
 - slope from two points such as `A(1,3), B(5,11)`
 - rectangle area/perimeter and triangle area when dimensions are explicit
