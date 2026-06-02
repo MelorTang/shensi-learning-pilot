@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="520" viewBox="0 0 900 520">
+  <rect width="900" height="520" fill="#fbfaf7"/>
+  <rect x="56" y="54" width="788" height="412" rx="18" fill="#ffffff" stroke="#222222" stroke-width="3"/>
+  <text x="96" y="130" font-family="Arial, sans-serif" font-size="34" fill="#202020">Shensi local sample mistake</text>
+  <text x="96" y="205" font-family="Arial, sans-serif" font-size="30" fill="#202020">Solve: 2x + 5 = 17</text>
+  <text x="96" y="275" font-family="Arial, sans-serif" font-size="30" fill="#b42318">Student answer: x = 5</text>
+  <text x="96" y="345" font-family="Arial, sans-serif" font-size="30" fill="#116329">Correct answer: x = 6</text>
+  <text x="96" y="415" font-family="Arial, sans-serif" font-size="24" fill="#555555">Used by scripts/run_local_demo.py and /local/simulate-upload.</text>
+</svg>

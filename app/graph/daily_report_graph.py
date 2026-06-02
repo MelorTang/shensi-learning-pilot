@@ -1,0 +1,2 @@
+"""Daily report graph placeholder."""
+

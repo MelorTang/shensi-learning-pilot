@@ -1,0 +1,12 @@
+{
+  "message_id": "local-demo-001",
+  "message_type": "image",
+  "chat_id": "local-dev",
+  "sender_id": "local-parent",
+  "subject": "math",
+  "grade": "grade7",
+  "note": "Local demo: equation transform mistake.",
+  "image_key": "img_local_demo_placeholder",
+  "local_image_path": "examples/sample_mistake.svg",
+  "auto_confirm": true
+}

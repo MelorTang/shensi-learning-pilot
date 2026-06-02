@@ -1,0 +1,39 @@
+[project]
+name = "shensi-learning-pilot"
+version = "0.1.0"
+description = "AI-assisted learning diagnosis and review system for parents."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.30.0",
+  "pydantic>=2.8.0",
+  "langgraph>=0.2.0",
+  "tzdata>=2025.2",
+]
+
+[project.optional-dependencies]
+feishu = [
+  "lark-oapi>=1.6.0",
+]
+dev = [
+  "httpx>=0.28.0",
+  "pytest>=8.0.0",
+  "ruff>=0.6.0",
+]
+
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["data*", "vault*", "docs*", "tests*", "scripts*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

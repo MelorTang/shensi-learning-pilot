@@ -1,0 +1,2 @@
+"""Weekly report graph placeholder."""
+
