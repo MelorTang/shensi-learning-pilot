@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from app.config import Settings
 from app.models.schemas import (
     ConfirmationRequest,
+    HermesAnalysisIngestRequest,
     HermesMistakeIngestRequest,
     LocalUploadRequest,
     ReportDraftRequest,
@@ -49,6 +50,30 @@ def ingest_mistake_image(body: HermesMistakeIngestRequest, request: Request) -> 
             source=f"hermes:{body.platform}",
             auto_confirm=body.auto_confirm,
         )
+    )
+
+
+@router.post("/ingest/mistake-analysis")
+def ingest_mistake_analysis(body: HermesAnalysisIngestRequest, request: Request) -> dict[str, Any]:
+    workflow = MistakeWorkflowService(_settings(request))
+    message_id = (
+        body.message_id
+        or body.platform_message_id
+        or f"{body.platform}:{body.chat_id or 'unknown'}:{body.sender_id or 'unknown'}"
+    )
+    return workflow.submit_external_analysis(
+        message_id=message_id,
+        platform=body.platform,
+        sender_id=body.sender_id,
+        chat_id=body.chat_id,
+        image_path=body.image_path,
+        image_base64=body.image_base64,
+        image_filename=body.image_filename,
+        subject=body.subject,
+        grade=body.grade,
+        note=body.note,
+        analysis=body.analysis,
+        auto_confirm=body.auto_confirm,
     )
 
 

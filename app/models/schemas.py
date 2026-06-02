@@ -32,6 +32,22 @@ class HermesMistakeIngestRequest(BaseModel):
     auto_confirm: bool = False
 
 
+class HermesAnalysisIngestRequest(BaseModel):
+    message_id: str | None = None
+    platform: str = "feishu"
+    platform_message_id: str | None = None
+    sender_id: str | None = None
+    chat_id: str | None = None
+    image_path: str | None = None
+    image_base64: str | None = None
+    image_filename: str | None = None
+    subject: str = "math"
+    grade: str = "grade7"
+    note: str = ""
+    analysis: dict[str, Any] = Field(default_factory=dict)
+    auto_confirm: bool = False
+
+
 class ConfirmationRequest(BaseModel):
     action: Literal["confirm", "discard", "modify"] = "confirm"
     confirmed_by: str = "local_parent"

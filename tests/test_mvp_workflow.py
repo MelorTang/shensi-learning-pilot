@@ -122,6 +122,72 @@ def test_hermes_ingest_accepts_base64_image(tmp_path):
     assert client.get("/debug/counts").json()["reviews"] == 3
 
 
+def test_hermes_ingest_accepts_external_analysis(tmp_path):
+    image_path = tmp_path / "real-homework.jpg"
+    image_path.write_bytes(b"fake homework image")
+    settings = Settings(
+        db_path=tmp_path / "shensi.db",
+        vault_path=tmp_path / "vault" / "Shensi-Learning-Vault",
+    )
+    client = TestClient(create_app(settings))
+
+    response = client.post(
+        "/ingest/mistake-analysis",
+        json={
+            "message_id": "hermes-analysis-001",
+            "platform": "feishu",
+            "sender_id": "parent-user",
+            "chat_id": "chat-001",
+            "image_path": str(image_path),
+            "subject": "math",
+            "grade": "grade7",
+            "note": "MiMo analysis from Feishu image",
+            "auto_confirm": True,
+            "analysis": {
+                "provider": "hermes",
+                "model": "mimo-v2.5",
+                "title": "初一数学｜一元一次方程练习",
+                "concepts": ["一元一次方程", "去括号", "移项"],
+                "error_types": ["漏乘", "移项符号错"],
+                "root_cause": "第2题去括号时漏乘 -2，第3题移项时符号处理错误。",
+                "severity": 4,
+                "confidence": 0.91,
+                "question_items": [
+                    {
+                        "question": "2x + 5 = 17",
+                        "student_steps": ["2x = 12", "x = 6"],
+                        "verdict": "correct",
+                    },
+                    {
+                        "question": "3(x - 2) = 12",
+                        "student_steps": ["3x - 2 = 12", "3x = 14", "x = 14/3"],
+                        "verdict": "wrong",
+                    },
+                    {
+                        "question": "5x - 7 = 2x + 8",
+                        "student_steps": ["5x - 2x = 8 - 7", "3x = 1", "x = 1/3"],
+                        "verdict": "wrong",
+                    },
+                ],
+                "student_answer": "第1题正确；第2题 x=14/3；第3题 x=1/3。",
+                "correct_answer": "第1题 x=6；第2题 x=6；第3题 x=5。",
+                "parent_guidance": "重点复盘去括号分配律和移项变号。",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["analysis"]["model"] == "mimo-v2.5"
+    assert body["analysis"]["error_types"] == ["missed_condition", "calculation_error"]
+    assert body["confirmation"]["status"] == "confirmed"
+    assert Path(body["confirmation"]["note_path"]).exists()
+    counts = client.get("/debug/counts").json()
+    assert counts["mistakes"] == 1
+    assert counts["reviews"] == 3
+    assert counts["reports"] == 2
+
+
 def test_feishu_webhook_image_payload_without_credentials_uses_stub(tmp_path):
     settings = Settings(
         db_path=tmp_path / "shensi.db",

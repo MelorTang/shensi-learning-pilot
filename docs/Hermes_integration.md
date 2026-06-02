@@ -13,7 +13,60 @@ Parent in Feishu
 
 Hermes should not write the Obsidian vault or SQLite database directly. It should call Shensi APIs so that deduplication, confirmation state, review scheduling, and reports stay consistent.
 
-## Ingest API
+## Preferred Flow: Vision Analysis First
+
+When Hermes can read the Feishu image with a multimodal model, it should analyze
+the image first and then submit the structured analysis to Shensi:
+
+```text
+POST http://127.0.0.1:8000/ingest/mistake-analysis
+```
+
+Request body:
+
+```json
+{
+  "message_id": "feishu-message-id-or-hermes-stable-id",
+  "platform": "feishu",
+  "sender_id": "optional-parent-id",
+  "chat_id": "optional-chat-id",
+  "image_path": "optional-local-cached-image-path",
+  "image_base64": "optional-base64-image-content",
+  "image_filename": "mistake.jpg",
+  "subject": "math",
+  "grade": "grade7",
+  "note": "optional parent note",
+  "auto_confirm": false,
+  "analysis": {
+    "provider": "hermes",
+    "model": "mimo-v2.5",
+    "title": "初一数学｜一元一次方程练习",
+    "question_items": [
+      {
+        "question": "3(x - 2) = 12",
+        "student_steps": ["3x - 2 = 12", "3x = 14", "x = 14/3"],
+        "verdict": "wrong"
+      }
+    ],
+    "student_answer": "第2题 x=14/3；第3题 x=1/3。",
+    "correct_answer": "第2题 x=6；第3题 x=5。",
+    "concepts": ["一元一次方程", "去括号", "移项"],
+    "error_types": ["漏乘", "移项符号错"],
+    "root_cause": "第2题去括号时漏乘 -2，第3题移项时符号处理错误。",
+    "severity": 4,
+    "confidence": 0.91,
+    "parent_guidance": "重点复盘去括号分配律和移项变号。"
+  }
+}
+```
+
+Shensi normalizes common Chinese error labels such as `漏乘`, `移项符号错`,
+`跳步`, and `计算错误` into internal error type ids before writing SQLite.
+
+## Fallback Flow: Image Only
+
+Use this only when Hermes cannot produce a structured analysis yet. In the
+current MVP this route may use the Shensi stub AI provider.
 
 ```text
 POST http://127.0.0.1:8000/ingest/mistake-image
@@ -77,10 +130,16 @@ Add this as a project instruction or skill for Hermes:
 ```text
 You are the Feishu entry agent for Shensi Learning Pilot.
 
-When the parent sends a mistake image, do not write SQLite or Obsidian directly.
-Call POST http://127.0.0.1:8000/ingest/mistake-image with a stable message_id,
-platform="feishu", sender_id, chat_id, subject, grade, note, and either image_path
-or image_base64.
+When the parent sends a mistake image, read the image with your multimodal model
+first. Do not write SQLite or Obsidian directly.
+
+Create a structured JSON analysis with title, question_items, student_answer,
+correct_answer, concepts, error_types, root_cause, severity, confidence, and
+parent_guidance.
+
+Then call POST http://127.0.0.1:8000/ingest/mistake-analysis with a stable
+message_id, platform="feishu", sender_id, chat_id, subject, grade, note, the
+image_path or image_base64, and the analysis JSON.
 
 After Shensi returns status="waiting_confirmation", show the parent the key fields
 from analysis: title, concepts, error_types, root_cause, confidence, and ask whether

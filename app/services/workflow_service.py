@@ -51,6 +51,146 @@ class MistakeWorkflowService:
         }
         return self.submit_payload(payload, source=request.source, auto_confirm=request.auto_confirm)
 
+    def submit_external_analysis(
+        self,
+        *,
+        message_id: str,
+        platform: str,
+        sender_id: str | None,
+        chat_id: str | None,
+        image_path: str | None,
+        image_base64: str | None,
+        image_filename: str | None,
+        subject: str,
+        grade: str,
+        note: str,
+        analysis: dict[str, Any],
+        auto_confirm: bool = False,
+    ) -> dict[str, Any]:
+        self.sqlite.initialize()
+        self.obsidian.initialize_vault()
+        now = self._now()
+        today = now[:10]
+        source = f"hermes:{platform}:analysis"
+        mistake_id = self._mistake_id(message_id)
+        payload = {
+            "message_id": message_id,
+            "message_type": "external_analysis",
+            "chat_id": chat_id,
+            "sender_id": sender_id,
+            "source": source,
+            "subject": subject,
+            "grade": grade,
+            "note": note,
+            "image_path": image_path,
+            "image_base64": image_base64,
+            "image_filename": image_filename,
+            "analysis": analysis,
+            "auto_confirm": auto_confirm,
+        }
+        raw_payload_path = self.obsidian.save_raw_payload(message_id, payload)
+        inserted = self.sqlite.upsert_feishu_message(
+            message_id=message_id,
+            chat_id=chat_id,
+            sender_id=sender_id,
+            message_type="external_analysis",
+            raw_payload_path=str(raw_payload_path),
+            status="received",
+            created_at=now,
+        )
+        if not inserted:
+            existing = self.sqlite.get_mistake(mistake_id)
+            result: dict[str, Any] = {
+                "status": existing["status"] if existing else "duplicated",
+                "message_id": message_id,
+                "mistake_id": mistake_id,
+                "mistake": existing,
+                "duplicate": True,
+            }
+            if auto_confirm and existing and existing["status"] == "waiting_confirmation":
+                result["confirmation"] = self.confirm_mistake(
+                    mistake_id,
+                    ConfirmationRequest(action="confirm", confirmed_by="hermes"),
+                )
+            elif auto_confirm and existing and existing["status"] == "confirmed":
+                result["confirmation"] = {
+                    "status": "confirmed",
+                    "mistake_id": mistake_id,
+                    "note_path": existing.get("note_path"),
+                }
+            return result
+
+        parsed = {
+            "message_id": message_id,
+            "local_image_path": image_path,
+            "image_base64": image_base64,
+            "image_filename": image_filename,
+        }
+        saved_image_path, download_status = self._save_inbound_image(message_id, parsed, source)
+        normalized = self._normalize_external_analysis(
+            analysis=analysis,
+            mistake_id=mistake_id,
+            message_id=message_id,
+            image_path=saved_image_path,
+            subject=subject,
+            grade=grade,
+            note=note,
+            today=today,
+            source=source,
+        )
+        output_path = self.obsidian.save_ai_output(mistake_id, normalized)
+        self.sqlite.upsert_mistake(
+            {
+                "id": mistake_id,
+                "subject": normalized["subject"],
+                "grade": normalized["grade"],
+                "date": normalized["date"],
+                "title": normalized["title"],
+                "source": source,
+                "image_path": str(saved_image_path),
+                "note_path": None,
+                "raw_json_path": str(output_path),
+                "severity": normalized["severity"],
+                "confidence": normalized["confidence"],
+                "status": "waiting_confirmation",
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+        self.sqlite.upsert_ai_run(
+            {
+                "id": f"ai:{mistake_id}",
+                "mistake_id": mistake_id,
+                "model_name": normalized["model"],
+                "prompt_version": normalized["prompt_version"],
+                "input_path": str(saved_image_path),
+                "output_json_path": str(output_path),
+                "confidence": normalized["confidence"],
+                "created_at": now,
+            }
+        )
+        self.sqlite.update_message_status(message_id, "waiting_confirmation")
+        result = {
+            "status": "waiting_confirmation",
+            "message_id": message_id,
+            "mistake_id": mistake_id,
+            "duplicate": False,
+            "raw_payload_path": str(raw_payload_path),
+            "image_path": str(saved_image_path),
+            "image_download": download_status,
+            "analysis": normalized,
+            "next": {
+                "confirm": f"/mistakes/{mistake_id}/confirm",
+                "discard": f"/mistakes/{mistake_id}/discard",
+            },
+        }
+        if auto_confirm:
+            result["confirmation"] = self.confirm_mistake(
+                mistake_id,
+                ConfirmationRequest(action="confirm", confirmed_by="hermes"),
+            )
+        return result
+
     def submit_payload(
         self,
         payload: dict[str, Any],
@@ -374,6 +514,141 @@ class MistakeWorkflowService:
             return None
         suffix = Path(filename).suffix.strip()
         return suffix or None
+
+    def _normalize_external_analysis(
+        self,
+        *,
+        analysis: dict[str, Any],
+        mistake_id: str,
+        message_id: str,
+        image_path: Path,
+        subject: str,
+        grade: str,
+        note: str,
+        today: str,
+        source: str,
+    ) -> dict[str, Any]:
+        question_items = analysis.get("question_items") or analysis.get("questions") or []
+        title = analysis.get("title") or analysis.get("worksheet_title") or "External vision mistake analysis"
+        question_text = analysis.get("question_text") or self._question_items_text(question_items)
+        student_answer = analysis.get("student_answer") or analysis.get("student_answers") or ""
+        correct_answer = analysis.get("correct_answer") or analysis.get("correct_answers") or ""
+        root_cause = analysis.get("root_cause") or analysis.get("summary") or "External vision analysis submitted by Hermes."
+        return {
+            "schema_version": str(analysis.get("schema_version") or "0.1"),
+            "provider": str(analysis.get("provider") or "hermes"),
+            "model": str(analysis.get("model") or analysis.get("model_name") or "external-vision"),
+            "prompt_version": str(analysis.get("prompt_version") or "external-analysis-v0.1"),
+            "mistake_id": mistake_id,
+            "message_id": message_id,
+            "subject": str(analysis.get("subject") or subject),
+            "grade": str(analysis.get("grade") or grade),
+            "date": str(analysis.get("date") or today),
+            "title": str(title),
+            "question_text": str(question_text or "See original image and external analysis JSON."),
+            "student_answer": self._stringify_answer(student_answer),
+            "correct_answer": self._stringify_answer(correct_answer),
+            "concepts": self._normalize_list(analysis.get("concepts") or ["linear equation"]),
+            "error_types": self._normalize_error_types(analysis.get("error_types") or analysis.get("errors")),
+            "root_cause": str(root_cause),
+            "severity": self._clamp_int(analysis.get("severity"), default=3, low=1, high=5),
+            "confidence": self._clamp_float(analysis.get("confidence"), default=0.8, low=0.0, high=1.0),
+            "status": "waiting_confirmation",
+            "parent_guidance": str(
+                analysis.get("parent_guidance")
+                or "Ask the child to re-solve the marked wrong steps and explain the sign changes."
+            ),
+            "image_path": str(image_path),
+            "note": note,
+            "source": source,
+            "question_items": question_items,
+            "external_analysis": analysis,
+        }
+
+    def _question_items_text(self, items: Any) -> str:
+        if not isinstance(items, list):
+            return ""
+        parts: list[str] = []
+        for index, item in enumerate(items, start=1):
+            if not isinstance(item, dict):
+                parts.append(f"{index}. {item}")
+                continue
+            question = item.get("question") or item.get("title") or f"Question {index}"
+            steps = self._stringify_answer(item.get("student_steps") or item.get("steps") or "")
+            verdict = item.get("verdict") or item.get("is_correct") or ""
+            parts.append(f"{index}. {question}\nStudent steps: {steps}\nVerdict: {verdict}")
+        return "\n\n".join(parts)
+
+    def _stringify_answer(self, value: Any) -> str:
+        if isinstance(value, str):
+            return value
+        if isinstance(value, list):
+            return "\n".join(str(item) for item in value)
+        if isinstance(value, dict):
+            return json.dumps(value, ensure_ascii=False, indent=2)
+        return "" if value is None else str(value)
+
+    def _normalize_list(self, value: Any) -> list[str]:
+        if isinstance(value, str):
+            return [value]
+        if isinstance(value, list):
+            return [str(item) for item in value if str(item).strip()]
+        return []
+
+    def _normalize_error_types(self, value: Any) -> list[str]:
+        aliases = {
+            "计算错误": "calculation_error",
+            "計算錯誤": "calculation_error",
+            "calculation": "calculation_error",
+            "漏乘": "missed_condition",
+            "漏乘括号": "missed_condition",
+            "漏乘括號": "missed_condition",
+            "审题漏条件": "missed_condition",
+            "跳步": "step_skipped",
+            "步骤跳跃": "step_skipped",
+            "step skipped": "step_skipped",
+            "移项符号错": "calculation_error",
+            "移项符号错误": "calculation_error",
+            "符号错误": "calculation_error",
+            "概念不清": "concept_unclear",
+            "方法不会": "method_missing",
+            "表达不规范": "expression_irregular",
+            "粗心": "attention_careless",
+            "迁移困难": "transfer_difficulty",
+            "时间管理": "time_management",
+        }
+        allowed = {
+            "concept_unclear",
+            "missed_condition",
+            "method_missing",
+            "calculation_error",
+            "memory_weak",
+            "expression_irregular",
+            "step_skipped",
+            "attention_careless",
+            "transfer_difficulty",
+            "time_management",
+        }
+        normalized: list[str] = []
+        for item in self._normalize_list(value):
+            key = aliases.get(item.strip(), item.strip())
+            if key in allowed and key not in normalized:
+                normalized.append(key)
+        return normalized or ["calculation_error"]
+
+    def _clamp_int(self, value: Any, *, default: int, low: int, high: int) -> int:
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            parsed = default
+        return max(low, min(high, parsed))
+
+    def _clamp_float(self, value: Any, *, default: float, low: float, high: float) -> float:
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            parsed = default
+        return max(low, min(high, parsed))
 
     def _apply_overrides(self, analysis: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
         allowed = {

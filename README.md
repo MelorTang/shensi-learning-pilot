@@ -83,7 +83,13 @@ Parent in Feishu
 
 Hermes should not write SQLite or Obsidian directly. It should call Shensi APIs so deduplication, parent confirmation, review tasks, reports, and indexes stay consistent.
 
-Hermes ingest endpoint:
+Preferred Hermes ingest endpoint when Hermes/MiMo has already read the image:
+
+```text
+POST http://127.0.0.1:8000/ingest/mistake-analysis
+```
+
+Fallback image-only endpoint:
 
 ```text
 POST http://127.0.0.1:8000/ingest/mistake-image
@@ -104,6 +110,7 @@ See [docs/Hermes_integration.md](docs/Hermes_integration.md) for the Hermes inst
 ## Useful APIs
 
 - `GET /health`
+- `POST /ingest/mistake-analysis`
 - `POST /ingest/mistake-image`
 - `POST /feishu/webhook`
 - `POST /local/simulate-upload`
