@@ -131,6 +131,11 @@ the Obsidian mistake card. Unsupported, parse-failed, or conflicting items are
 marked with `needs_parent_review=true` so the parent confirmation step can treat
 them cautiously.
 
+`POST /ingest/mistake-analysis` also returns a top-level
+`confirmation_summary` for Hermes to show in Feishu. It includes total question
+count, Shensi-verified count, wrong question ids, and question ids that need
+parent review.
+
 Recommended Hermes prompt shape:
 
 ```text

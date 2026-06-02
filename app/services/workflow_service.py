@@ -181,6 +181,7 @@ class MistakeWorkflowService:
             "image_path": str(saved_image_path),
             "image_download": download_status,
             "analysis": normalized,
+            "confirmation_summary": normalized["confirmation_summary"],
             "next": {
                 "confirm": f"/mistakes/{mistake_id}/confirm",
                 "discard": f"/mistakes/{mistake_id}/discard",
@@ -534,6 +535,7 @@ class MistakeWorkflowService:
             analysis.get("question_items") or analysis.get("questions") or []
         )
         question_items, math_verification = self.math_verifier.verify_question_items(question_items)
+        confirmation_summary = self._build_confirmation_summary(question_items, math_verification)
         title = analysis.get("title") or analysis.get("worksheet_title") or "External vision mistake analysis"
         question_text = analysis.get("question_text") or self._question_items_text(question_items)
         student_answer = analysis.get("student_answer") or analysis.get("student_answers") or ""
@@ -572,8 +574,45 @@ class MistakeWorkflowService:
             "source": source,
             "question_items": question_items,
             "math_verification": math_verification,
+            "confirmation_summary": confirmation_summary,
             "external_analysis": analysis,
         }
+
+    def _build_confirmation_summary(
+        self,
+        question_items: list[dict[str, Any]],
+        math_verification: dict[str, Any],
+    ) -> dict[str, Any]:
+        wrong_items = [
+            item.get("id") for item in question_items if item.get("is_correct") is False
+        ]
+        review_items = [
+            item.get("id") for item in question_items if item.get("needs_parent_review")
+        ]
+        return {
+            "total_questions": len(question_items),
+            "verified_questions": int(math_verification.get("verified_count") or 0),
+            "wrong_questions": [item for item in wrong_items if item is not None],
+            "needs_parent_review_questions": [item for item in review_items if item is not None],
+            "needs_parent_review_count": int(
+                math_verification.get("needs_parent_review_count") or 0
+            ),
+            "message": self._confirmation_summary_message(question_items, math_verification),
+        }
+
+    def _confirmation_summary_message(
+        self,
+        question_items: list[dict[str, Any]],
+        math_verification: dict[str, Any],
+    ) -> str:
+        total = len(question_items)
+        verified = int(math_verification.get("verified_count") or 0)
+        review_count = int(math_verification.get("needs_parent_review_count") or 0)
+        wrong_count = len([item for item in question_items if item.get("is_correct") is False])
+        return (
+            f"{total} question(s), {verified} verified by Shensi, "
+            f"{wrong_count} marked wrong, {review_count} need parent review."
+        )
 
     def _normalize_question_items(self, items: Any) -> list[dict[str, Any]]:
         if not isinstance(items, list):

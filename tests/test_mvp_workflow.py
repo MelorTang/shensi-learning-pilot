@@ -328,6 +328,13 @@ def test_external_analysis_math_verifier_overrides_bad_llm_verdict(tmp_path):
     assert body["analysis"]["math_verification"]["unsupported_count"] == 1
     assert body["analysis"]["math_verification"]["conflict_count"] == 4
     assert body["analysis"]["math_verification"]["needs_parent_review_count"] == 5
+    assert body["confirmation_summary"] == body["analysis"]["confirmation_summary"]
+    assert body["confirmation_summary"]["total_questions"] == 7
+    assert body["confirmation_summary"]["verified_questions"] == 6
+    assert body["confirmation_summary"]["wrong_questions"] == [2, 3, 4, 5, 6]
+    assert body["confirmation_summary"]["needs_parent_review_questions"] == [2, 4, 5, 6, 7]
+    assert body["confirmation_summary"]["needs_parent_review_count"] == 5
+    assert "need parent review" in body["confirmation_summary"]["message"]
 
     note = Path(body["confirmation"]["note_path"]).read_text(encoding="utf-8")
     assert "linear_system_substitution" in note

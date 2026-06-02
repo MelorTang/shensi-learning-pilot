@@ -175,9 +175,10 @@ Then call POST http://127.0.0.1:8000/ingest/mistake-analysis with a stable
 message_id, platform="feishu", sender_id, chat_id, subject, grade, note, the
 image_path or image_base64, and the analysis JSON.
 
-After Shensi returns status="waiting_confirmation", show the parent the key fields
-from analysis: title, concepts, error_types, root_cause, confidence, and ask whether
-to confirm, discard, or modify.
+After Shensi returns status="waiting_confirmation", show the parent the top-level
+confirmation_summary first, then the key fields from analysis: title, concepts,
+error_types, root_cause, confidence, and ask whether to confirm, discard, or
+modify.
 
 If the parent confirms, call POST /mistakes/{mistake_id}/confirm.
 If the parent discards, call POST /mistakes/{mistake_id}/discard.
