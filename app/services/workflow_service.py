@@ -110,10 +110,14 @@ class MistakeWorkflowService:
                 "duplicate": True,
             }
             if auto_confirm and existing and existing["status"] == "waiting_confirmation":
-                result["confirmation"] = self.confirm_mistake(
-                    mistake_id,
-                    ConfirmationRequest(action="confirm", confirmed_by="hermes"),
-                )
+                existing_analysis = self.sqlite.read_json_file(existing.get("raw_json_path"))
+                if self._can_auto_confirm_external_analysis(existing_analysis):
+                    result["confirmation"] = self.confirm_mistake(
+                        mistake_id,
+                        ConfirmationRequest(action="confirm", confirmed_by="hermes"),
+                    )
+                else:
+                    result |= self._auto_confirm_blocked_payload(existing_analysis)
             elif auto_confirm and existing and existing["status"] == "confirmed":
                 result["confirmation"] = {
                     "status": "confirmed",
@@ -188,10 +192,13 @@ class MistakeWorkflowService:
             },
         }
         if auto_confirm:
-            result["confirmation"] = self.confirm_mistake(
-                mistake_id,
-                ConfirmationRequest(action="confirm", confirmed_by="hermes"),
-            )
+            if self._can_auto_confirm_external_analysis(normalized):
+                result["confirmation"] = self.confirm_mistake(
+                    mistake_id,
+                    ConfirmationRequest(action="confirm", confirmed_by="hermes"),
+                )
+            else:
+                result |= self._auto_confirm_blocked_payload(normalized)
         return result
 
     def submit_payload(
@@ -613,6 +620,21 @@ class MistakeWorkflowService:
             f"{total} question(s), {verified} verified by Shensi, "
             f"{wrong_count} marked wrong, {review_count} need parent review."
         )
+
+    def _can_auto_confirm_external_analysis(self, analysis: dict[str, Any] | None) -> bool:
+        if not analysis:
+            return False
+        summary = analysis.get("confirmation_summary") or {}
+        return int(summary.get("needs_parent_review_count") or 0) == 0
+
+    def _auto_confirm_blocked_payload(self, analysis: dict[str, Any] | None) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "auto_confirm_blocked": True,
+            "auto_confirm_blocked_reason": "parent review required",
+        }
+        if analysis and analysis.get("confirmation_summary"):
+            payload["confirmation_summary"] = analysis["confirmation_summary"]
+        return payload
 
     def _normalize_question_items(self, items: Any) -> list[dict[str, Any]]:
         if not isinstance(items, list):

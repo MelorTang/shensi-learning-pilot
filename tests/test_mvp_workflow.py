@@ -296,6 +296,10 @@ def test_external_analysis_math_verifier_overrides_bad_llm_verdict(tmp_path):
 
     assert response.status_code == 200
     body = response.json()
+    assert body["status"] == "waiting_confirmation"
+    assert "confirmation" not in body
+    assert body["auto_confirm_blocked"] is True
+    assert body["auto_confirm_blocked_reason"] == "parent review required"
     questions = body["analysis"]["question_items"]
     assert questions[0]["is_correct"] is True
     assert questions[0]["verification"]["method"] == "function_substitution"
@@ -336,7 +340,13 @@ def test_external_analysis_math_verifier_overrides_bad_llm_verdict(tmp_path):
     assert body["confirmation_summary"]["needs_parent_review_count"] == 5
     assert "need parent review" in body["confirmation_summary"]["message"]
 
-    note = Path(body["confirmation"]["note_path"]).read_text(encoding="utf-8")
+    confirmation = client.post(
+        f"/mistakes/{body['mistake_id']}/confirm",
+        json={"action": "confirm", "confirmed_by": "test_parent", "overrides": {}},
+    ).json()
+    assert confirmation["status"] == "confirmed"
+
+    note = Path(confirmation["note_path"]).read_text(encoding="utf-8")
     assert "linear_system_substitution" in note
     assert "ratio_equation_cross_multiply" in note
     assert "linear_simplification" in note

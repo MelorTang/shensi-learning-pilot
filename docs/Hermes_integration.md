@@ -180,6 +180,10 @@ confirmation_summary first, then the key fields from analysis: title, concepts,
 error_types, root_cause, confidence, and ask whether to confirm, discard, or
 modify.
 
+If Shensi returns `auto_confirm_blocked=true`, do not retry auto-confirm. Show
+the parent the confirmation_summary and wait for explicit confirmation,
+discard, or modification.
+
 If the parent confirms, call POST /mistakes/{mistake_id}/confirm.
 If the parent discards, call POST /mistakes/{mistake_id}/discard.
 If the parent edits fields, call confirm with action="modify" and put allowed edits

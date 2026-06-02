@@ -134,7 +134,9 @@ them cautiously.
 `POST /ingest/mistake-analysis` also returns a top-level
 `confirmation_summary` for Hermes to show in Feishu. It includes total question
 count, Shensi-verified count, wrong question ids, and question ids that need
-parent review.
+parent review. If `auto_confirm=true` is sent but any question needs parent
+review, Shensi returns `auto_confirm_blocked=true` and keeps the mistake in
+`waiting_confirmation`.
 
 Recommended Hermes prompt shape:
 
