@@ -122,6 +122,13 @@ directly. The wrapper should send per-question fields in
 student steps, verdict, correct answer, and error reason instead of a flat
 summary.
 
+Recommended Feishu UX:
+
+- Bot menu: `慎思分析`, `今日日报`, `复习任务`, `帮助`
+- Result card buttons: `确认入库`, `丢弃`, `重新分析`, `修改后入库`
+- Keep confirm/discard actions on the card, because they belong to one specific
+  analysis result.
+
 Shensi now also runs a deterministic math verification layer after Hermes
 submits extracted JSON. The current MVP verifier covers common junior-high
 algebra items:

@@ -32,6 +32,32 @@ Antigravity/Gemini to extract the visible homework content into structured JSON,
 then submit that JSON to Shensi. Shensi will run deterministic verification for
 supported algebra items after ingest.
 
+## Feishu UX Plan
+
+Use bot menus for starting Shensi workflows, and use interactive cards for
+deciding what to do with one specific analysis result.
+
+Recommended bot menu items:
+
+- 慎思分析: send text `慎思：分析刚才图片`
+- 今日日报: send text `慎思：查看今日日报`
+- 复习任务: send text `慎思：查看复习任务`
+- 帮助: send text `慎思：帮助`
+
+Do not put confirmation actions in the menu. Confirmation is tied to a specific
+analysis result, so it belongs on the result card.
+
+Recommended result card buttons:
+
+- 确认入库: `value.action = shensi_confirm`
+- 丢弃: `value.action = shensi_discard`
+- 重新分析: `value.action = shensi_reanalyze`
+- 修改后入库: `value.action = shensi_modify_confirm`
+
+Each card button should include `value.mistake_id`. The future Feishu card
+callback handler can route these actions to Shensi confirm, discard, reanalyze,
+or modify-confirm APIs without asking the parent to type IDs.
+
 ```text
 POST http://127.0.0.1:8000/ingest/mistake-analysis
 ```
@@ -188,10 +214,10 @@ message_id, platform="feishu", sender_id, chat_id, subject, grade, note, the
 image_path or image_base64, and the analysis JSON.
 
 Only call the Shensi workflow when the parent clearly asks to process learning
-material. Good trigger phrases include "提交这张错题", "分析刚才的图片", "确认入库",
-"丢弃刚才那条", "查看今天日报", "查看复习任务", and "重新生成周报". For normal chat,
-study encouragement, or general questions, answer normally and do not call
-Shensi APIs or wrapper scripts.
+material. Good trigger phrases include "提交这张错题", "分析刚才的图片",
+"慎思：分析刚才图片", "慎思：查看今日日报", "慎思：查看复习任务", and "慎思：帮助".
+For normal chat, study encouragement, or general questions, answer normally and
+do not call Shensi APIs or wrapper scripts.
 
 After Shensi returns status="waiting_confirmation", call
 GET /hermes/pending/latest and show the parent its `reply_text`. Do not paste
@@ -202,10 +228,9 @@ If Shensi returns `auto_confirm_blocked=true`, do not retry auto-confirm. Show
 the parent a short summary and wait for explicit confirmation, discard, or
 modification.
 
-If the parent confirms the latest pending analysis, call
-POST /hermes/pending/latest/confirm.
-If the parent discards the latest pending analysis, call
-POST /hermes/pending/latest/discard.
+If the parent clicks a result card button, route by `value.action`. If the
+parent types a fallback command like "确认入库" or "丢弃", call
+POST /hermes/pending/latest/confirm or POST /hermes/pending/latest/discard.
 If the parent edits fields, call confirm with action="modify" and put allowed edits
 in overrides. If there are multiple pending items and the parent is ambiguous,
 ask which one they mean before confirming or discarding.

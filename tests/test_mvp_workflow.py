@@ -6,6 +6,7 @@ import base64
 from fastapi.testclient import TestClient
 
 from app.config import Settings
+from app.feishu.cards import build_pending_mistake_card
 from app.main import create_app
 from app.models.schemas import LocalUploadRequest
 from app.services.sqlite_service import SQLiteService
@@ -286,6 +287,33 @@ def test_hermes_parent_friendly_latest_pending_flow(tmp_path):
     assert "已确认入库" in confirmation["reply_text"]
     assert client.get("/hermes/pending/latest").json()["found"] is False
     assert client.get("/debug/counts").json()["reviews"] == 3
+
+
+def test_feishu_pending_mistake_card_contract():
+    card = build_pending_mistake_card(
+        {
+            "mistake_id": "mistake-001",
+            "title": "初二数学｜一次函数与方程组小测",
+            "root_cause": "第3题斜率公式分子顺序反了。",
+            "parent_guidance": "复习斜率公式。",
+            "questions": [
+                {"id": 1, "student_answer": "y=8", "correct_answer": "y=8", "is_correct": True},
+                {"id": 2, "student_answer": "x=4,y=6", "correct_answer": "x=4,y=6", "is_correct": True},
+                {"id": 3, "student_answer": "k=-2", "correct_answer": "k=2", "is_correct": False},
+            ],
+        }
+    )
+
+    assert card["header"]["title"]["content"] == "初二数学｜一次函数与方程组小测"
+    actions = card["elements"][-1]["actions"]
+    assert [item["text"]["content"] for item in actions] == ["确认入库", "丢弃", "重新分析", "修改后入库"]
+    assert [item["value"]["action"] for item in actions] == [
+        "shensi_confirm",
+        "shensi_discard",
+        "shensi_reanalyze",
+        "shensi_modify_confirm",
+    ]
+    assert all(item["value"]["mistake_id"] == "mistake-001" for item in actions)
 
 
 def test_external_analysis_math_verifier_overrides_bad_llm_verdict(tmp_path):
