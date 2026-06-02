@@ -242,6 +242,7 @@ def test_external_analysis_math_verifier_overrides_bad_llm_verdict(tmp_path):
                     "slope",
                     "ratio equation",
                     "like terms",
+                    "rectangle perimeter",
                 ],
                 "error_types": ["calculation_error"],
                 "root_cause": "The model should be checked by deterministic math verification.",
@@ -275,6 +276,11 @@ def test_external_analysis_math_verifier_overrides_bad_llm_verdict(tmp_path):
                         "student_answer": "3x+7",
                         "is_correct": True,
                     },
+                    {
+                        "question": "A rectangle has length 8 and width 5. Find perimeter.",
+                        "student_answer": "P=35",
+                        "is_correct": True,
+                    },
                 ],
                 "student_answer": "Q1 y=8; Q2 x=4,y=5; Q3 k=-2",
                 "correct_answer": "",
@@ -303,16 +309,22 @@ def test_external_analysis_math_verifier_overrides_bad_llm_verdict(tmp_path):
     assert questions[4]["is_correct"] is False
     assert questions[4]["correct_answer"] == "3x+8"
     assert questions[4]["verification"]["method"] == "linear_simplification"
-    assert body["analysis"]["math_verification"]["verified_count"] == 5
-    assert body["analysis"]["math_verification"]["conflict_count"] == 3
+    assert questions[5]["llm_is_correct"] is True
+    assert questions[5]["is_correct"] is False
+    assert questions[5]["correct_answer"] == "26"
+    assert questions[5]["verification"]["method"] == "rectangle_perimeter"
+    assert body["analysis"]["math_verification"]["verified_count"] == 6
+    assert body["analysis"]["math_verification"]["conflict_count"] == 4
 
     note = Path(body["confirmation"]["note_path"]).read_text(encoding="utf-8")
     assert "linear_system_substitution" in note
     assert "ratio_equation_cross_multiply" in note
     assert "linear_simplification" in note
+    assert "rectangle_perimeter" in note
     assert "overrode LLM verdict" in note
     assert "x=4, y=6" in note
     assert "3x+8" in note
+    assert "26" in note
 
 
 def test_feishu_webhook_image_payload_without_credentials_uses_stub(tmp_path):

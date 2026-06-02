@@ -89,6 +89,7 @@ class MathVerificationService:
 
         for verifier in (
             self._verify_slope,
+            self._verify_geometry_measure,
             self._verify_function_substitution,
             self._verify_linear_system,
             self._verify_ratio_equation,
@@ -104,6 +105,109 @@ class MathVerificationService:
             "method": None,
             "reason": "No deterministic verifier matched this question type.",
         }
+
+    def _verify_geometry_measure(self, question: str, answer_text: str) -> dict[str, Any]:
+        lower = question.lower()
+        is_area = self._contains_any(lower, ("area", "面积"))
+        is_perimeter = self._contains_any(lower, ("perimeter", "周长"))
+        if not is_area and not is_perimeter:
+            return self._unsupported()
+
+        if self._contains_any(lower, ("rectangle", "rectangular", "长方形", "矩形")):
+            result = self._verify_rectangle_measure(question, answer_text, is_area, is_perimeter)
+            if result["status"] != "unsupported":
+                return result
+
+        if self._contains_any(lower, ("triangle", "三角形")):
+            result = self._verify_triangle_measure(question, answer_text, is_area)
+            if result["status"] != "unsupported":
+                return result
+
+        return self._unsupported()
+
+    def _verify_rectangle_measure(
+        self,
+        question: str,
+        answer_text: str,
+        is_area: bool,
+        is_perimeter: bool,
+    ) -> dict[str, Any]:
+        length = self._extract_dimension(question, ("length", "long", "长"))
+        width = self._extract_dimension(question, ("width", "wide", "宽"))
+        if length is None or width is None:
+            return self._unsupported()
+        expected = length * width if is_area else 2 * (length + width)
+        label = "area" if is_area else "perimeter"
+        actual = self._parse_measure_answer(answer_text)
+        if actual is None:
+            return self._parse_failed("geometry_measure", "No numeric measure found in student answer.")
+        is_correct = actual == expected
+        return self._verified(
+            method=f"rectangle_{label}",
+            is_correct=is_correct,
+            correct_answer=self._format_number(expected),
+            reason=(
+                ""
+                if is_correct
+                else (
+                    f"Rectangle {label} is {self._format_number(expected)}, "
+                    f"not {self._format_number(actual)}."
+                )
+            ),
+            checks=[
+                {
+                    "shape": "rectangle",
+                    "measure": label,
+                    "length": self._format_number(length),
+                    "width": self._format_number(width),
+                    "expected": self._format_number(expected),
+                    "student": self._format_number(actual),
+                    "passed": is_correct,
+                }
+            ],
+        )
+
+    def _verify_triangle_measure(
+        self,
+        question: str,
+        answer_text: str,
+        is_area: bool,
+    ) -> dict[str, Any]:
+        if not is_area:
+            return self._unsupported()
+        base = self._extract_dimension(question, ("base", "底"))
+        height = self._extract_dimension(question, ("height", "高"))
+        if base is None or height is None:
+            return self._unsupported()
+        expected = base * height / 2
+        actual = self._parse_measure_answer(answer_text)
+        if actual is None:
+            return self._parse_failed("geometry_measure", "No numeric measure found in student answer.")
+        is_correct = actual == expected
+        return self._verified(
+            method="triangle_area",
+            is_correct=is_correct,
+            correct_answer=self._format_number(expected),
+            reason=(
+                ""
+                if is_correct
+                else (
+                    f"Triangle area is {self._format_number(expected)}, "
+                    f"not {self._format_number(actual)}."
+                )
+            ),
+            checks=[
+                {
+                    "shape": "triangle",
+                    "measure": "area",
+                    "base": self._format_number(base),
+                    "height": self._format_number(height),
+                    "expected": self._format_number(expected),
+                    "student": self._format_number(actual),
+                    "passed": is_correct,
+                }
+            ],
+        )
 
     def _verify_function_substitution(self, question: str, answer_text: str) -> dict[str, Any]:
         if "y" not in question or "x" not in question:
@@ -439,6 +543,40 @@ class MathVerificationService:
             for variable in variables
         )
         return coefficients_equal and first.constant == second.constant
+
+    def _contains_any(self, text: str, needles: tuple[str, ...]) -> bool:
+        return any(needle in text for needle in needles)
+
+    def _extract_dimension(self, text: str, labels: tuple[str, ...]) -> Fraction | None:
+        normalized = self._normalize_text(text)
+        for label in labels:
+            match = re.search(
+                rf"{re.escape(label)}\s*(?:is|=|:|为|是)?\s*([+-]?\d+(?:/\d+)?(?:\.\d+)?)",
+                normalized,
+                flags=re.IGNORECASE,
+            )
+            if match:
+                try:
+                    return self._parse_number(match.group(1))
+                except ValueError:
+                    return None
+        return None
+
+    def _parse_measure_answer(self, text: str) -> Fraction | None:
+        normalized = self._normalize_text(text)
+        assignment = re.search(r"=\s*([+-]?\d+(?:/\d+)?(?:\.\d+)?)", normalized)
+        if assignment:
+            try:
+                return self._parse_number(assignment.group(1))
+            except ValueError:
+                return None
+        matches = re.findall(r"([+-]?\d+(?:/\d+)?(?:\.\d+)?)", normalized)
+        if not matches:
+            return None
+        try:
+            return self._parse_number(matches[0])
+        except ValueError:
+            return None
 
     def _answer_text(self, item: dict[str, Any]) -> str:
         parts = [str(item.get("student_answer") or "")]
