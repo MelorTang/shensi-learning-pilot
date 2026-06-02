@@ -193,6 +193,7 @@ status: confirmed
             concept = item.get("concept") or item.get("knowledge_point") or ""
             error_type = item.get("error_type") or item.get("error_types") or ""
             verification = self._format_verification(item.get("verification"))
+            review_status = self._format_parent_review(item)
 
             sections.append(
                 "\n".join(
@@ -206,6 +207,7 @@ status: confirmed
                         f"- Error type: {self._format_inline(error_type) or 'Not provided'}",
                         f"- Error reason: {error_reason or 'Not provided'}",
                         f"- Verification: {verification}",
+                        f"- Parent review: {review_status}",
                         "",
                         "Student steps:",
                         "",
@@ -214,6 +216,12 @@ status: confirmed
                 )
             )
         return "\n\n".join(sections)
+
+    def _format_parent_review(self, item: dict[str, Any]) -> str:
+        if not item.get("needs_parent_review"):
+            return "not required"
+        reason = item.get("review_reason")
+        return f"required ({reason})" if reason else "required"
 
     def _format_verification(self, value: Any) -> str:
         if not isinstance(value, dict):

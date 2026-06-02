@@ -281,6 +281,11 @@ def test_external_analysis_math_verifier_overrides_bad_llm_verdict(tmp_path):
                         "student_answer": "P=35",
                         "is_correct": True,
                     },
+                    {
+                        "question": "Prove that two base angles of an isosceles triangle are equal.",
+                        "student_answer": "proof omitted",
+                        "is_correct": True,
+                    },
                 ],
                 "student_answer": "Q1 y=8; Q2 x=4,y=5; Q3 k=-2",
                 "correct_answer": "",
@@ -299,7 +304,9 @@ def test_external_analysis_math_verifier_overrides_bad_llm_verdict(tmp_path):
     assert questions[1]["verified_is_correct"] is False
     assert questions[1]["correct_answer"] == "x=4, y=6"
     assert questions[1]["verification"]["conflict_with_llm"] is True
+    assert questions[1]["needs_parent_review"] is True
     assert questions[2]["is_correct"] is False
+    assert questions[2]["needs_parent_review"] is False
     assert questions[2]["correct_answer"] == "k=2"
     assert questions[3]["llm_is_correct"] is True
     assert questions[3]["is_correct"] is False
@@ -313,8 +320,14 @@ def test_external_analysis_math_verifier_overrides_bad_llm_verdict(tmp_path):
     assert questions[5]["is_correct"] is False
     assert questions[5]["correct_answer"] == "26"
     assert questions[5]["verification"]["method"] == "rectangle_perimeter"
+    assert questions[6]["is_correct"] is True
+    assert questions[6]["verification"]["status"] == "unsupported"
+    assert questions[6]["needs_parent_review"] is True
+    assert questions[6]["review_reason"] == "verification unsupported"
     assert body["analysis"]["math_verification"]["verified_count"] == 6
+    assert body["analysis"]["math_verification"]["unsupported_count"] == 1
     assert body["analysis"]["math_verification"]["conflict_count"] == 4
+    assert body["analysis"]["math_verification"]["needs_parent_review_count"] == 5
 
     note = Path(body["confirmation"]["note_path"]).read_text(encoding="utf-8")
     assert "linear_system_substitution" in note
@@ -325,6 +338,8 @@ def test_external_analysis_math_verifier_overrides_bad_llm_verdict(tmp_path):
     assert "x=4, y=6" in note
     assert "3x+8" in note
     assert "26" in note
+    assert "Parent review: required" in note
+    assert "Parent review: not required" in note
 
 
 def test_feishu_webhook_image_payload_without_credentials_uses_stub(tmp_path):

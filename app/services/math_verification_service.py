@@ -48,11 +48,14 @@ class MathVerificationService:
             "unsupported_count": 0,
             "conflict_count": 0,
             "wrong_count": 0,
+            "needs_parent_review_count": 0,
         }
         for item in items:
             verified = dict(item)
             result = self.verify_item(verified)
             verified["verification"] = result
+            needs_parent_review = False
+            review_reason = ""
             if result["status"] == "verified":
                 summary["verified_count"] += 1
                 if result["is_correct"] is False:
@@ -63,6 +66,8 @@ class MathVerificationService:
                     verified["llm_is_correct"] = previous
                     result["conflict_with_llm"] = True
                     summary["conflict_count"] += 1
+                    needs_parent_review = True
+                    review_reason = "deterministic verifier overrode the LLM verdict"
                 verified["is_correct"] = result["is_correct"]
                 if result.get("correct_answer"):
                     verified["correct_answer"] = result["correct_answer"]
@@ -74,6 +79,12 @@ class MathVerificationService:
                     verified.setdefault("error_type", "calculation_error")
             else:
                 summary["unsupported_count"] += 1
+                needs_parent_review = True
+                review_reason = f"verification {result['status']}"
+            verified["needs_parent_review"] = needs_parent_review
+            if review_reason:
+                verified["review_reason"] = review_reason
+                summary["needs_parent_review_count"] += 1
             verified_items.append(verified)
         return verified_items, summary
 

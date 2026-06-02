@@ -127,7 +127,9 @@ algebra items:
 If the verifier can calculate the answer and disagrees with the LLM verdict,
 Shensi stores the original LLM verdict as `llm_is_correct`, overrides
 `is_correct` with the verified result, and writes the verification method into
-the Obsidian mistake card.
+the Obsidian mistake card. Unsupported, parse-failed, or conflicting items are
+marked with `needs_parent_review=true` so the parent confirmation step can treat
+them cautiously.
 
 Recommended Hermes prompt shape:
 
