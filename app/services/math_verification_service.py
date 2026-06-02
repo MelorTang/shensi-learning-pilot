@@ -22,6 +22,15 @@ class LinearExpr:
             self.constant - other.constant,
         )
 
+    def scale(self, coefficient: Fraction) -> "LinearExpr":
+        return LinearExpr(
+            {variable: value * coefficient for variable, value in self.coefficients.items()},
+            self.constant * coefficient,
+        )
+
+    def has_variable_terms(self) -> bool:
+        return any(coefficient != 0 for coefficient in self.coefficients.values())
+
     def evaluate(self, values: dict[str, Fraction]) -> Fraction:
         total = self.constant
         for variable, coefficient in self.coefficients.items():
@@ -82,6 +91,7 @@ class MathVerificationService:
             self._verify_slope,
             self._verify_function_substitution,
             self._verify_linear_system,
+            self._verify_ratio_equation,
             self._verify_one_variable_equation,
         ):
             result = verifier(question, answer_text)
@@ -216,6 +226,55 @@ class MathVerificationService:
             ],
         )
 
+    def _verify_ratio_equation(self, question: str, answer_text: str) -> dict[str, Any]:
+        if "/" not in question or question.count("=") != 1 or "x" not in question:
+            return self._unsupported()
+        raw_equations = self._extract_equations(question, variables=("x",))
+        if not raw_equations:
+            return self._unsupported()
+        raw_equation = raw_equations[0]
+        try:
+            left_text, right_text = raw_equation.split("=", 1)
+            left_numerator, left_denominator = self._parse_ratio_side(left_text, variables=("x",))
+            right_numerator, right_denominator = self._parse_ratio_side(right_text, variables=("x",))
+            left_product = self._multiply_linear_exprs(left_numerator, right_denominator)
+            right_product = self._multiply_linear_exprs(right_numerator, left_denominator)
+            equation = left_product.subtract(right_product)
+            expected = self._solve_one_variable_zero(equation)
+            if left_denominator.evaluate({"x": expected}) == 0:
+                return self._parse_failed("ratio_equation", "Solution makes the left denominator zero.")
+            if right_denominator.evaluate({"x": expected}) == 0:
+                return self._parse_failed("ratio_equation", "Solution makes the right denominator zero.")
+        except ValueError:
+            return self._parse_failed("ratio_equation")
+
+        answers = self._parse_assignments(answer_text)
+        actual = answers.get("x")
+        if actual is None:
+            return self._parse_failed("ratio_equation", "No x value found in student answer.")
+        is_correct = actual == expected
+        return self._verified(
+            method="ratio_equation_cross_multiply",
+            is_correct=is_correct,
+            correct_answer=f"x={self._format_number(expected)}",
+            reason=(
+                ""
+                if is_correct
+                else (
+                    f"Cross multiplication gives x={self._format_number(expected)}, "
+                    f"not x={self._format_number(actual)}."
+                )
+            ),
+            checks=[
+                {
+                    "equation": raw_equation,
+                    "expected": self._format_number(expected),
+                    "student": self._format_number(actual),
+                    "passed": is_correct,
+                }
+            ],
+        )
+
     def _verify_one_variable_equation(self, question: str, answer_text: str) -> dict[str, Any]:
         if question.count("=") != 1 or "x" not in question:
             return self._unsupported()
@@ -224,10 +283,7 @@ class MathVerificationService:
             return self._unsupported()
         try:
             equation = self._parse_equation(raw_equations[0], variables=("x",))
-            coefficient = equation.coefficients.get("x", Fraction(0))
-            if coefficient == 0:
-                return self._unsupported()
-            expected = -equation.constant / coefficient
+            expected = self._solve_one_variable_zero(equation)
         except ValueError:
             return self._parse_failed("one_variable_equation")
         answers = self._parse_assignments(answer_text)
@@ -254,6 +310,44 @@ class MathVerificationService:
             ],
         )
 
+    def _parse_ratio_side(
+        self,
+        text: str,
+        *,
+        variables: tuple[str, ...],
+    ) -> tuple[LinearExpr, LinearExpr]:
+        numerator_text, denominator_text = self._split_top_level_fraction(text)
+        numerator = self._parse_linear_expr(numerator_text, variables=variables)
+        denominator = self._parse_linear_expr(denominator_text, variables=variables)
+        if not denominator.has_variable_terms() and denominator.constant == 0:
+            raise ValueError("ratio denominator is zero")
+        return numerator, denominator
+
+    def _split_top_level_fraction(self, text: str) -> tuple[str, str]:
+        compact = self._normalize_text(text).replace(" ", "")
+        depth = 0
+        for index, char in enumerate(compact):
+            if char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+            elif char == "/" and depth == 0:
+                return compact[:index], compact[index + 1 :]
+        return compact, "1"
+
+    def _multiply_linear_exprs(self, first: LinearExpr, second: LinearExpr) -> LinearExpr:
+        if first.has_variable_terms() and second.has_variable_terms():
+            raise ValueError("nonlinear product is not supported")
+        if first.has_variable_terms():
+            return first.scale(second.constant)
+        return second.scale(first.constant)
+
+    def _solve_one_variable_zero(self, equation: LinearExpr) -> Fraction:
+        coefficient = equation.coefficients.get("x", Fraction(0))
+        if coefficient == 0:
+            raise ValueError("equation has no x coefficient")
+        return -equation.constant / coefficient
+
     def _answer_text(self, item: dict[str, Any]) -> str:
         parts = [str(item.get("student_answer") or "")]
         steps = item.get("student_steps") or []
@@ -270,6 +364,9 @@ class MathVerificationService:
             compact = part.strip()
             if ":" in compact and "=" in compact.split(":", 1)[1]:
                 compact = compact.split(":", 1)[1].strip()
+            leading_equation = re.search(r"([xyk]\b|[+-]?\d|\()", compact)
+            if leading_equation and leading_equation.start() > 0:
+                compact = compact[leading_equation.start() :].strip()
             if "=" in compact and any(variable in compact for variable in variables):
                 equations.append(compact)
         if not equations and "=" in text:

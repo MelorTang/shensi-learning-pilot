@@ -117,6 +117,7 @@ submits extracted JSON. The current MVP verifier covers common junior-high
 algebra items:
 
 - one-variable linear equations, including simple distributive parentheses like `3(x-2)=12`
+- ratio equations that stay linear after cross multiplication, such as `x/3=4/6`
 - linear function substitution such as `y=-3x+2` with a given `x`
 - two-variable linear systems such as `x+y=10, 2x-y=2`
 - slope from two points such as `A(1,3), B(5,11)`

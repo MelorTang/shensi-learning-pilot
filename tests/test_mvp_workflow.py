@@ -236,7 +236,7 @@ def test_external_analysis_math_verifier_overrides_bad_llm_verdict(tmp_path):
                 "provider": "hermes",
                 "model": "mimo-v2.5",
                 "title": "Grade 8 algebra check",
-                "concepts": ["linear function", "linear system", "slope"],
+                "concepts": ["linear function", "linear system", "slope", "ratio equation"],
                 "error_types": ["calculation_error"],
                 "root_cause": "The model should be checked by deterministic math verification.",
                 "severity": 3,
@@ -259,6 +259,11 @@ def test_external_analysis_math_verifier_overrides_bad_llm_verdict(tmp_path):
                         "student_answer": "k=-2",
                         "is_correct": False,
                     },
+                    {
+                        "question": "Solve the proportion x/3 = 4/6",
+                        "student_answer": "x=3",
+                        "is_correct": True,
+                    },
                 ],
                 "student_answer": "Q1 y=8; Q2 x=4,y=5; Q3 k=-2",
                 "correct_answer": "",
@@ -279,11 +284,16 @@ def test_external_analysis_math_verifier_overrides_bad_llm_verdict(tmp_path):
     assert questions[1]["verification"]["conflict_with_llm"] is True
     assert questions[2]["is_correct"] is False
     assert questions[2]["correct_answer"] == "k=2"
-    assert body["analysis"]["math_verification"]["verified_count"] == 3
-    assert body["analysis"]["math_verification"]["conflict_count"] == 1
+    assert questions[3]["llm_is_correct"] is True
+    assert questions[3]["is_correct"] is False
+    assert questions[3]["correct_answer"] == "x=2"
+    assert questions[3]["verification"]["method"] == "ratio_equation_cross_multiply"
+    assert body["analysis"]["math_verification"]["verified_count"] == 4
+    assert body["analysis"]["math_verification"]["conflict_count"] == 2
 
     note = Path(body["confirmation"]["note_path"]).read_text(encoding="utf-8")
     assert "linear_system_substitution" in note
+    assert "ratio_equation_cross_multiply" in note
     assert "overrode LLM verdict" in note
     assert "x=4, y=6" in note
 
