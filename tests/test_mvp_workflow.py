@@ -211,6 +211,83 @@ def test_hermes_ingest_accepts_external_analysis(tmp_path):
     assert counts["reports"] == 2
 
 
+def test_hermes_parent_friendly_latest_pending_flow(tmp_path):
+    image_path = tmp_path / "pending-homework.jpg"
+    image_path.write_bytes(b"fake pending homework image")
+    settings = Settings(
+        db_path=tmp_path / "shensi.db",
+        vault_path=tmp_path / "vault" / "Shensi-Learning-Vault",
+    )
+    client = TestClient(create_app(settings))
+
+    response = client.post(
+        "/ingest/mistake-analysis",
+        json={
+            "message_id": "hermes-parent-friendly-001",
+            "platform": "feishu",
+            "sender_id": "parent-user",
+            "chat_id": "chat-001",
+            "image_path": str(image_path),
+            "subject": "math",
+            "grade": "grade8",
+            "note": "parent friendly pending flow",
+            "auto_confirm": False,
+            "analysis": {
+                "provider": "antigravity",
+                "model": "gemini-via-antigravity",
+                "title": "初二数学｜一次函数与方程组小测",
+                "concepts": ["一次函数求值", "二元一次方程组", "斜率公式"],
+                "error_types": ["calculation_error"],
+                "root_cause": "第3题斜率公式分子顺序反了。",
+                "severity": 3,
+                "confidence": 0.95,
+                "question_items": [
+                    {
+                        "id": 1,
+                        "question": "已知一次函数 y = -3x + 2，求当 x = -2 时 y 的值。",
+                        "student_answer": "y = 8",
+                        "is_correct": True,
+                    },
+                    {
+                        "id": 2,
+                        "question": "解方程组：x + y = 10，2x - y = 2。",
+                        "student_answer": "x = 4, y = 6",
+                        "is_correct": True,
+                    },
+                    {
+                        "id": 3,
+                        "question": "已知点 A(1,3)，B(5,11)，求直线 AB 的斜率 k。",
+                        "student_answer": "k = -2",
+                        "is_correct": False,
+                    },
+                ],
+                "parent_guidance": "复习斜率公式 k=(y2-y1)/(x2-x1)。",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "waiting_confirmation"
+
+    pending = client.get("/hermes/pending/latest").json()
+    assert pending["found"] is True
+    assert pending["mistake_id"] == response.json()["mistake_id"]
+    assert pending["actions"]["confirm_latest"] == "/hermes/pending/latest/confirm"
+    assert "确认入库" in pending["reply_text"]
+    assert "curl" not in pending["reply_text"].lower()
+    assert pending["questions"][0]["verification_method"] == "function_substitution"
+    assert pending["questions"][2]["is_correct"] is False
+
+    confirmation = client.post(
+        "/hermes/pending/latest/confirm",
+        json={"action": "confirm", "confirmed_by": "feishu_parent", "overrides": {}},
+    ).json()
+    assert confirmation["status"] == "confirmed"
+    assert "已确认入库" in confirmation["reply_text"]
+    assert client.get("/hermes/pending/latest").json()["found"] is False
+    assert client.get("/debug/counts").json()["reviews"] == 3
+
+
 def test_external_analysis_math_verifier_overrides_bad_llm_verdict(tmp_path):
     image_path = tmp_path / "grade8-homework.jpg"
     image_path.write_bytes(b"fake grade8 homework image")

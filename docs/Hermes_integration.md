@@ -187,19 +187,37 @@ Then call POST http://127.0.0.1:8000/ingest/mistake-analysis with a stable
 message_id, platform="feishu", sender_id, chat_id, subject, grade, note, the
 image_path or image_base64, and the analysis JSON.
 
-After Shensi returns status="waiting_confirmation", show the parent the top-level
-confirmation_summary first, then the key fields from analysis: title, concepts,
-error_types, root_cause, confidence, and ask whether to confirm, discard, or
-modify.
+Only call the Shensi workflow when the parent clearly asks to process learning
+material. Good trigger phrases include "提交这张错题", "分析刚才的图片", "确认入库",
+"丢弃刚才那条", "查看今天日报", "查看复习任务", and "重新生成周报". For normal chat,
+study encouragement, or general questions, answer normally and do not call
+Shensi APIs or wrapper scripts.
+
+After Shensi returns status="waiting_confirmation", call
+GET /hermes/pending/latest and show the parent its `reply_text`. Do not paste
+raw JSON, curl commands, local file paths, stack traces, or API details unless
+the parent explicitly asks for debug information.
 
 If Shensi returns `auto_confirm_blocked=true`, do not retry auto-confirm. Show
-the parent the confirmation_summary and wait for explicit confirmation,
-discard, or modification.
+the parent a short summary and wait for explicit confirmation, discard, or
+modification.
 
-If the parent confirms, call POST /mistakes/{mistake_id}/confirm.
-If the parent discards, call POST /mistakes/{mistake_id}/discard.
+If the parent confirms the latest pending analysis, call
+POST /hermes/pending/latest/confirm.
+If the parent discards the latest pending analysis, call
+POST /hermes/pending/latest/discard.
 If the parent edits fields, call confirm with action="modify" and put allowed edits
-in overrides.
+in overrides. If there are multiple pending items and the parent is ambiguous,
+ask which one they mean before confirming or discarding.
+
+Parent-facing output style:
+
+- Keep it short: title, which questions are wrong, one root cause, one parent
+  guidance sentence, then ask "确认入库还是丢弃？"
+- Use natural Chinese.
+- Hide implementation details by default.
+- Do not mention Hermes, Antigravity, SQLite, Obsidian, curl, JSON, or file
+  paths unless debugging.
 
 Never bypass the Shensi APIs for writes.
 ```

@@ -168,6 +168,9 @@ you already have structured analysis.
 - `POST /mistakes/{mistake_id}/discard`
 - `GET /mistakes`
 - `GET /reviews/today`
+- `GET /hermes/pending/latest`
+- `POST /hermes/pending/latest/confirm`
+- `POST /hermes/pending/latest/discard`
 - `POST /reports/daily/regenerate`
 - `POST /reports/weekly/regenerate`
 - `GET /reports`

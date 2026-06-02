@@ -140,6 +140,48 @@ def hermes_stats(request: Request, days: int = Query(default=14, ge=1, le=365)) 
     return HermesService(sqlite).recent_stats(days=days)
 
 
+@router.get("/hermes/pending/latest")
+def hermes_latest_pending(request: Request) -> dict[str, Any]:
+    sqlite = SQLiteService(_settings(request).db_path)
+    return HermesService(sqlite).latest_pending()
+
+
+@router.post("/hermes/pending/latest/confirm")
+def hermes_confirm_latest_pending(
+    request: Request,
+    body: ConfirmationRequest | None = None,
+) -> dict[str, Any]:
+    workflow = MistakeWorkflowService(_settings(request))
+    latest = HermesService(workflow.sqlite).latest_pending()
+    if not latest["found"]:
+        return latest
+    confirmation = body or ConfirmationRequest(action="confirm", confirmed_by="feishu_parent")
+    if confirmation.action == "discard":
+        confirmation = ConfirmationRequest(
+            action="confirm",
+            confirmed_by=confirmation.confirmed_by,
+            overrides=confirmation.overrides,
+        )
+    result = workflow.confirm_mistake(latest["mistake_id"], confirmation)
+    result["reply_text"] = "已确认入库。错题卡、复习任务、日报和周报都已更新。"
+    return result
+
+
+@router.post("/hermes/pending/latest/discard")
+def hermes_discard_latest_pending(
+    request: Request,
+    body: ConfirmationRequest | None = None,
+) -> dict[str, Any]:
+    workflow = MistakeWorkflowService(_settings(request))
+    latest = HermesService(workflow.sqlite).latest_pending()
+    if not latest["found"]:
+        return latest
+    confirmed_by = (body.confirmed_by if body else None) or "feishu_parent"
+    result = workflow.discard_mistake(latest["mistake_id"], confirmed_by=confirmed_by)
+    result["reply_text"] = "已丢弃这条分析，不会写入错题卡或复习计划。"
+    return result
+
+
 @router.get("/hermes/concepts/{concept_name}/mistakes")
 def hermes_concept_mistakes(concept_name: str, request: Request) -> dict[str, Any]:
     sqlite = SQLiteService(_settings(request).db_path)
