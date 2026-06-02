@@ -186,6 +186,16 @@ def test_hermes_ingest_accepts_external_analysis(tmp_path):
     body = response.json()
     assert body["analysis"]["model"] == "mimo-v2.5"
     assert body["analysis"]["error_types"] == ["missed_condition", "calculation_error"]
+    questions = body["analysis"]["question_items"]
+    assert body["analysis"]["math_verification"]["verified_count"] == 3
+    assert questions[0]["verification"]["method"] == "one_variable_equation"
+    assert questions[0]["is_correct"] is True
+    assert questions[1]["verification"]["method"] == "one_variable_equation"
+    assert questions[1]["is_correct"] is False
+    assert questions[1]["correct_answer"] == "x=6"
+    assert questions[2]["verification"]["method"] == "one_variable_equation"
+    assert questions[2]["is_correct"] is False
+    assert questions[2]["correct_answer"] == "x=5"
     assert body["confirmation"]["status"] == "confirmed"
     note_path = Path(body["confirmation"]["note_path"])
     assert note_path.exists()
@@ -194,6 +204,7 @@ def test_hermes_ingest_accepts_external_analysis(tmp_path):
     assert "3x - 2 = 12" in note
     assert "missed distributing 3 to -2" in note
     assert "- Result: wrong" in note
+    assert "one_variable_equation" in note
     counts = client.get("/debug/counts").json()
     assert counts["mistakes"] == 1
     assert counts["reviews"] == 3

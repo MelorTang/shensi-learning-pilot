@@ -58,12 +58,21 @@ class MathVerificationService:
                 if result.get("correct_answer"):
                     verified["correct_answer"] = result["correct_answer"]
                 if not result["is_correct"] and result.get("reason"):
-                    verified["error_reason"] = result["reason"]
+                    verified["error_reason"] = self._merge_error_reason(
+                        verified.get("error_reason"),
+                        result["reason"],
+                    )
                     verified.setdefault("error_type", "calculation_error")
             else:
                 summary["unsupported_count"] += 1
             verified_items.append(verified)
         return verified_items, summary
+
+    def _merge_error_reason(self, existing: Any, verification_reason: str) -> str:
+        existing_text = str(existing or "").strip()
+        if not existing_text:
+            return verification_reason
+        return f"{existing_text} Verification: {verification_reason}"
 
     def verify_item(self, item: dict[str, Any]) -> dict[str, Any]:
         question = self._normalize_text(str(item.get("question") or ""))
@@ -275,6 +284,7 @@ class MathVerificationService:
 
     def _parse_linear_expr(self, text: str, *, variables: tuple[str, ...]) -> LinearExpr:
         compact = self._normalize_text(text).replace(" ", "")
+        compact = self._expand_parenthesized_products(compact, variables=variables)
         compact = compact.replace("-", "+-")
         if compact.startswith("+"):
             compact = compact[1:]
@@ -294,6 +304,57 @@ class MathVerificationService:
             else:
                 constant += self._parse_number(term)
         return LinearExpr(coefficients, constant)
+
+    def _expand_parenthesized_products(self, text: str, *, variables: tuple[str, ...]) -> str:
+        compact = text.replace("*(", "(")
+        pattern = re.compile(r"([+-]?(?:\d+(?:/\d+)?(?:\.\d+)?)?)\(([^()]+)\)")
+
+        while True:
+            match = pattern.search(compact)
+            if not match:
+                return compact
+            coefficient = self._parse_implicit_coefficient(match.group(1))
+            inner = self._parse_linear_expr(match.group(2), variables=variables)
+            expanded = LinearExpr(
+                {
+                    variable: coefficient * value
+                    for variable, value in inner.coefficients.items()
+                },
+                coefficient * inner.constant,
+            )
+            replacement = self._linear_expr_to_text(expanded)
+            if match.group(1).startswith("+") and not replacement.startswith("-"):
+                replacement = f"+{replacement}"
+            compact = compact[: match.start()] + replacement + compact[match.end() :]
+
+    def _parse_implicit_coefficient(self, text: str) -> Fraction:
+        if text in {"", "+"}:
+            return Fraction(1)
+        if text == "-":
+            return Fraction(-1)
+        return self._parse_number(text)
+
+    def _linear_expr_to_text(self, expression: LinearExpr) -> str:
+        parts: list[str] = []
+        for variable, coefficient in expression.coefficients.items():
+            if coefficient == 0:
+                continue
+            if coefficient == 1:
+                parts.append(f"+{variable}")
+            elif coefficient == -1:
+                parts.append(f"-{variable}")
+            elif coefficient > 0:
+                parts.append(f"+{self._format_number(coefficient)}{variable}")
+            else:
+                parts.append(f"{self._format_number(coefficient)}{variable}")
+        if expression.constant > 0:
+            parts.append(f"+{self._format_number(expression.constant)}")
+        elif expression.constant < 0:
+            parts.append(self._format_number(expression.constant))
+        if not parts:
+            return "0"
+        result = "".join(parts)
+        return result[1:] if result.startswith("+") else result
 
     def _solve_two_variable_system(self, first: LinearExpr, second: LinearExpr) -> dict[str, Fraction]:
         a1 = first.coefficients.get("x", Fraction(0))
