@@ -200,6 +200,83 @@ def test_hermes_ingest_accepts_external_analysis(tmp_path):
     assert counts["reports"] == 2
 
 
+def test_external_analysis_math_verifier_overrides_bad_llm_verdict(tmp_path):
+    image_path = tmp_path / "grade8-homework.jpg"
+    image_path.write_bytes(b"fake grade8 homework image")
+    settings = Settings(
+        db_path=tmp_path / "shensi.db",
+        vault_path=tmp_path / "vault" / "Shensi-Learning-Vault",
+    )
+    client = TestClient(create_app(settings))
+
+    response = client.post(
+        "/ingest/mistake-analysis",
+        json={
+            "message_id": "math-verifier-001",
+            "platform": "feishu",
+            "sender_id": "parent-user",
+            "chat_id": "chat-001",
+            "image_path": str(image_path),
+            "subject": "math",
+            "grade": "grade8",
+            "note": "LLM claimed a wrong system answer was correct",
+            "auto_confirm": True,
+            "analysis": {
+                "provider": "hermes",
+                "model": "mimo-v2.5",
+                "title": "Grade 8 algebra check",
+                "concepts": ["linear function", "linear system", "slope"],
+                "error_types": ["calculation_error"],
+                "root_cause": "The model should be checked by deterministic math verification.",
+                "severity": 3,
+                "confidence": 0.95,
+                "question_items": [
+                    {
+                        "question": "Given y=-3x+2, find y when x=-2",
+                        "student_answer": "y=8",
+                        "student_steps": ["y=-3*(-2)+2", "y=6+2", "y=8"],
+                        "is_correct": True,
+                    },
+                    {
+                        "question": "Solve the system: x+y=10, 2x-y=2",
+                        "student_answer": "x=4, y=5",
+                        "student_steps": ["x+y=10", "2x-y=2", "x=4,y=5"],
+                        "is_correct": True,
+                    },
+                    {
+                        "question": "Find the slope of A(1,3), B(5,11)",
+                        "student_answer": "k=-2",
+                        "is_correct": False,
+                    },
+                ],
+                "student_answer": "Q1 y=8; Q2 x=4,y=5; Q3 k=-2",
+                "correct_answer": "",
+                "parent_guidance": "Ask the child to substitute every answer back into the original equation.",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    questions = body["analysis"]["question_items"]
+    assert questions[0]["is_correct"] is True
+    assert questions[0]["verification"]["method"] == "function_substitution"
+    assert questions[1]["llm_is_correct"] is True
+    assert questions[1]["is_correct"] is False
+    assert questions[1]["verified_is_correct"] is False
+    assert questions[1]["correct_answer"] == "x=4, y=6"
+    assert questions[1]["verification"]["conflict_with_llm"] is True
+    assert questions[2]["is_correct"] is False
+    assert questions[2]["correct_answer"] == "k=2"
+    assert body["analysis"]["math_verification"]["verified_count"] == 3
+    assert body["analysis"]["math_verification"]["conflict_count"] == 1
+
+    note = Path(body["confirmation"]["note_path"]).read_text(encoding="utf-8")
+    assert "linear_system_substitution" in note
+    assert "overrode LLM verdict" in note
+    assert "x=4, y=6" in note
+
+
 def test_feishu_webhook_image_payload_without_credentials_uses_stub(tmp_path):
     settings = Settings(
         db_path=tmp_path / "shensi.db",

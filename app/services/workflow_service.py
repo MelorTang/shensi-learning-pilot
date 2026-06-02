@@ -12,6 +12,7 @@ from app.config import Settings
 from app.feishu.client import FeishuClient, FeishuClientError
 from app.models.schemas import ConfirmationRequest, LocalUploadRequest
 from app.services.ai_service import AIService
+from app.services.math_verification_service import MathVerificationService
 from app.services.obsidian_service import ObsidianService
 from app.services.report_service import ReportService
 from app.services.review_service import ReviewService
@@ -24,6 +25,7 @@ class MistakeWorkflowService:
         self.sqlite = SQLiteService(settings.db_path)
         self.obsidian = ObsidianService(settings.vault_path)
         self.ai = AIService(settings.ai_provider, settings.ai_model)
+        self.math_verifier = MathVerificationService()
         self.review = ReviewService()
         self.reports = ReportService(self.sqlite, self.obsidian)
 
@@ -531,11 +533,16 @@ class MistakeWorkflowService:
         question_items = self._normalize_question_items(
             analysis.get("question_items") or analysis.get("questions") or []
         )
+        question_items, math_verification = self.math_verifier.verify_question_items(question_items)
         title = analysis.get("title") or analysis.get("worksheet_title") or "External vision mistake analysis"
         question_text = analysis.get("question_text") or self._question_items_text(question_items)
         student_answer = analysis.get("student_answer") or analysis.get("student_answers") or ""
         correct_answer = analysis.get("correct_answer") or analysis.get("correct_answers") or ""
-        root_cause = analysis.get("root_cause") or analysis.get("summary") or "External vision analysis submitted by Hermes."
+        root_cause = (
+            analysis.get("root_cause")
+            or analysis.get("summary")
+            or "External vision analysis submitted by Hermes."
+        )
         return {
             "schema_version": str(analysis.get("schema_version") or "0.1"),
             "provider": str(analysis.get("provider") or "hermes"),
@@ -564,6 +571,7 @@ class MistakeWorkflowService:
             "note": note,
             "source": source,
             "question_items": question_items,
+            "math_verification": math_verification,
             "external_analysis": analysis,
         }
 

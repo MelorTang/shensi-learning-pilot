@@ -192,6 +192,7 @@ status: confirmed
             error_reason = item.get("error_reason") or item.get("reason") or item.get("mistake_reason") or ""
             concept = item.get("concept") or item.get("knowledge_point") or ""
             error_type = item.get("error_type") or item.get("error_types") or ""
+            verification = self._format_verification(item.get("verification"))
 
             sections.append(
                 "\n".join(
@@ -204,6 +205,7 @@ status: confirmed
                         f"- Concept: {concept or 'Not provided'}",
                         f"- Error type: {self._format_inline(error_type) or 'Not provided'}",
                         f"- Error reason: {error_reason or 'Not provided'}",
+                        f"- Verification: {verification}",
                         "",
                         "Student steps:",
                         "",
@@ -212,6 +214,24 @@ status: confirmed
                 )
             )
         return "\n\n".join(sections)
+
+    def _format_verification(self, value: Any) -> str:
+        if not isinstance(value, dict):
+            return "not run"
+        status = value.get("status") or "unknown"
+        method = value.get("method")
+        result = value.get("is_correct")
+        pieces = [str(status)]
+        if method:
+            pieces.append(str(method))
+        if isinstance(result, bool):
+            pieces.append("correct" if result else "wrong")
+        if value.get("conflict_with_llm"):
+            pieces.append("overrode LLM verdict")
+        reason = value.get("reason")
+        if reason:
+            pieces.append(str(reason))
+        return " | ".join(pieces)
 
     def _format_steps(self, value: Any) -> str:
         if isinstance(value, list):

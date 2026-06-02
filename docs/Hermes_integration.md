@@ -15,8 +15,10 @@ Hermes should not write the Obsidian vault or SQLite database directly. It shoul
 
 ## Preferred Flow: Vision Analysis First
 
-When Hermes can read the Feishu image with a multimodal model, it should analyze
-the image first and then submit the structured analysis to Shensi:
+When Hermes can read the Feishu image with a multimodal model, it should extract
+the visible homework content into structured JSON first and then submit that JSON
+to Shensi. Shensi will run deterministic verification for supported algebra
+items after ingest.
 
 ```text
 POST http://127.0.0.1:8000/ingest/mistake-analysis
@@ -84,6 +86,12 @@ Each `question_items` entry should include:
 Shensi also accepts common aliases such as `student_solution`,
 `student_process`, `solution_steps`, `recognized_steps`, `answer`, `verdict`,
 and `mistake_reason`, but the explicit field names above are preferred.
+
+For supported junior-high algebra items, Shensi will add `verification`,
+`verified_is_correct`, and sometimes `llm_is_correct` to each question item. If
+the deterministic verifier disagrees with the LLM verdict, Shensi keeps the
+original verdict in `llm_is_correct` and uses the verified result as
+`is_correct`.
 
 ## Fallback Flow: Image Only
 
@@ -153,16 +161,15 @@ Add this as a project instruction or skill for Hermes:
 You are the Feishu entry agent for Shensi Learning Pilot.
 
 When the parent sends a mistake image, read the image with your multimodal model
-first. Do not write SQLite or Obsidian directly.
-
-Before submitting to Shensi, verify every answer by substitution or an equivalent
-check. For equation systems, substitute the student's answer into every original
-equation.
+first and extract the visible text, formulas, student steps, and student answers
+into JSON. Do not write SQLite or Obsidian directly.
 
 Create a structured JSON analysis with title, question_items, student_answer,
 correct_answer, concepts, error_types, root_cause, severity, confidence, and
 parent_guidance. Every question_items entry must include question, student_steps,
-student_answer, correct_answer, is_correct, and error_reason.
+student_answer, correct_answer when visible or inferable, is_correct if you have
+a preliminary judgment, and error_reason if you see a likely mistake. Shensi will
+run deterministic verification after ingest for supported math types.
 
 Then call POST http://127.0.0.1:8000/ingest/mistake-analysis with a stable
 message_id, platform="feishu", sender_id, chat_id, subject, grade, note, the

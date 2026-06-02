@@ -112,6 +112,29 @@ submission and send per-question fields in `analysis.question_items`. This lets
 Obsidian cards show every question, student steps, verdict, correct answer, and
 error reason instead of a flat summary.
 
+Shensi now also runs a deterministic math verification layer after Hermes
+submits extracted JSON. The current MVP verifier covers common junior-high
+algebra items:
+
+- one-variable linear equations
+- linear function substitution such as `y=-3x+2` with a given `x`
+- two-variable linear systems such as `x+y=10, 2x-y=2`
+- slope from two points such as `A(1,3), B(5,11)`
+
+If the verifier can calculate the answer and disagrees with the LLM verdict,
+Shensi stores the original LLM verdict as `llm_is_correct`, overrides
+`is_correct` with the verified result, and writes the verification method into
+the Obsidian mistake card.
+
+Recommended Hermes prompt shape:
+
+```text
+Step 1: read the image and extract structured JSON only.
+Step 2: send that JSON to POST /ingest/mistake-analysis.
+Do not write SQLite or Obsidian directly. Do not use /ingest/mistake-image if
+you already have structured analysis.
+```
+
 ## Useful APIs
 
 - `GET /health`
@@ -219,3 +242,16 @@ python scripts/run_local_demo.py
 ```
 
 The demo is idempotent for `message_id=local-demo-001`; rerunning it will not create duplicate mistakes or review tasks.
+
+## Cloud Update
+
+After pushing local code to GitHub, update the running cloud service with:
+
+```bash
+cd ~/apps/shensi-learning-pilot
+git pull
+source .venv/bin/activate
+python -m pytest
+sudo systemctl restart shensi
+curl http://127.0.0.1:8000/health
+```
