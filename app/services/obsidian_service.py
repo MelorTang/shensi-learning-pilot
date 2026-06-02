@@ -123,6 +123,8 @@ class ObsidianService:
         image_file = Path(str(analysis.get("image_path", ""))).name
         concepts = ", ".join(analysis.get("concepts", [])) or "pending"
         error_types = ", ".join(analysis.get("error_types", [])) or "pending"
+        question_items = self._format_question_items(analysis.get("question_items", []))
+        question_section = question_items or str(analysis.get("question_text", ""))
         content = f"""---
 type: mistake
 mistake_id: "{mistake_id}"
@@ -140,7 +142,7 @@ status: confirmed
 
 ## AI Recognized Question
 
-{analysis.get("question_text", "")}
+{question_section}
 
 ## Student Answer
 
@@ -169,6 +171,70 @@ status: confirmed
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
         return path
+
+    def _format_question_items(self, items: Any) -> str:
+        if not isinstance(items, list) or not items:
+            return ""
+
+        sections: list[str] = []
+        for index, item in enumerate(items, start=1):
+            if not isinstance(item, dict):
+                sections.append(f"### Question {index}\n\n{item}")
+                continue
+
+            question = item.get("question") or item.get("title") or f"Question {index}"
+            student_steps = self._format_steps(item.get("student_steps") or item.get("steps"))
+            student_answer = item.get("student_answer") or item.get("answer") or ""
+            correct_answer = item.get("correct_answer") or ""
+            is_correct = item.get("is_correct")
+            if is_correct is None:
+                is_correct = item.get("verdict")
+            error_reason = item.get("error_reason") or item.get("reason") or item.get("mistake_reason") or ""
+            concept = item.get("concept") or item.get("knowledge_point") or ""
+            error_type = item.get("error_type") or item.get("error_types") or ""
+
+            sections.append(
+                "\n".join(
+                    [
+                        f"### Question {index}: {question}",
+                        "",
+                        f"- Result: {self._format_verdict(is_correct)}",
+                        f"- Student answer: {student_answer or 'Not provided'}",
+                        f"- Correct answer: {correct_answer or 'Not provided'}",
+                        f"- Concept: {concept or 'Not provided'}",
+                        f"- Error type: {self._format_inline(error_type) or 'Not provided'}",
+                        f"- Error reason: {error_reason or 'Not provided'}",
+                        "",
+                        "Student steps:",
+                        "",
+                        student_steps or "Not provided",
+                    ]
+                )
+            )
+        return "\n\n".join(sections)
+
+    def _format_steps(self, value: Any) -> str:
+        if isinstance(value, list):
+            return "\n".join(f"{index}. {step}" for index, step in enumerate(value, start=1))
+        if isinstance(value, dict):
+            return json.dumps(value, ensure_ascii=False, indent=2)
+        if value is None:
+            return ""
+        return str(value)
+
+    def _format_verdict(self, value: Any) -> str:
+        if isinstance(value, bool):
+            return "correct" if value else "wrong"
+        if value is None or value == "":
+            return "unknown"
+        return str(value)
+
+    def _format_inline(self, value: Any) -> str:
+        if isinstance(value, list):
+            return ", ".join(str(item) for item in value)
+        if value is None:
+            return ""
+        return str(value)
 
     def write_concept_note(self, concept: dict[str, Any]) -> Path:
         subject = self._safe_name(str(concept.get("subject", "math")))

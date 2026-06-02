@@ -107,6 +107,11 @@ Invoke-RestMethod `
 
 See [docs/Hermes_integration.md](docs/Hermes_integration.md) for the Hermes instruction draft.
 
+For real Feishu homework images, Hermes should verify each answer before
+submission and send per-question fields in `analysis.question_items`. This lets
+Obsidian cards show every question, student steps, verdict, correct answer, and
+error reason instead of a flat summary.
+
 ## Useful APIs
 
 - `GET /health`

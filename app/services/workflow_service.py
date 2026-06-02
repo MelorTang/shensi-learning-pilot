@@ -528,7 +528,9 @@ class MistakeWorkflowService:
         today: str,
         source: str,
     ) -> dict[str, Any]:
-        question_items = analysis.get("question_items") or analysis.get("questions") or []
+        question_items = self._normalize_question_items(
+            analysis.get("question_items") or analysis.get("questions") or []
+        )
         title = analysis.get("title") or analysis.get("worksheet_title") or "External vision mistake analysis"
         question_text = analysis.get("question_text") or self._question_items_text(question_items)
         student_answer = analysis.get("student_answer") or analysis.get("student_answers") or ""
@@ -565,6 +567,63 @@ class MistakeWorkflowService:
             "external_analysis": analysis,
         }
 
+    def _normalize_question_items(self, items: Any) -> list[dict[str, Any]]:
+        if not isinstance(items, list):
+            return []
+
+        normalized: list[dict[str, Any]] = []
+        for index, item in enumerate(items, start=1):
+            if not isinstance(item, dict):
+                normalized.append(
+                    {
+                        "id": index,
+                        "question": str(item),
+                        "student_steps": [],
+                        "student_answer": "",
+                        "correct_answer": "",
+                        "is_correct": None,
+                        "error_reason": "",
+                    }
+                )
+                continue
+
+            is_correct = item.get("is_correct")
+            if is_correct is None:
+                is_correct = item.get("correct")
+            if is_correct is None:
+                is_correct = self._parse_verdict(item.get("verdict") or item.get("result"))
+
+            student_steps = (
+                item.get("student_steps")
+                or item.get("steps")
+                or item.get("student_solution")
+                or item.get("student_process")
+                or item.get("solution_steps")
+                or item.get("recognized_steps")
+                or []
+            )
+            normalized.append(
+                {
+                    "id": item.get("id") or item.get("number") or index,
+                    "question": item.get("question") or item.get("title") or f"Question {index}",
+                    "type": item.get("type") or item.get("question_type") or "",
+                    "student_steps": self._normalize_steps(student_steps),
+                    "student_answer": item.get("student_answer") or item.get("answer") or "",
+                    "correct_answer": item.get("correct_answer") or item.get("expected_answer") or "",
+                    "is_correct": is_correct,
+                    "error_reason": (
+                        item.get("error_reason")
+                        or item.get("reason")
+                        or item.get("mistake_reason")
+                        or item.get("root_cause")
+                        or ""
+                    ),
+                    "concept": item.get("concept") or item.get("knowledge_point") or "",
+                    "error_type": item.get("error_type") or item.get("error_types") or "",
+                }
+            )
+        return normalized
+
     def _question_items_text(self, items: Any) -> str:
         if not isinstance(items, list):
             return ""
@@ -575,9 +634,34 @@ class MistakeWorkflowService:
                 continue
             question = item.get("question") or item.get("title") or f"Question {index}"
             steps = self._stringify_answer(item.get("student_steps") or item.get("steps") or "")
-            verdict = item.get("verdict") or item.get("is_correct") or ""
+            verdict = item.get("verdict")
+            if verdict is None:
+                verdict = item.get("is_correct")
             parts.append(f"{index}. {question}\nStudent steps: {steps}\nVerdict: {verdict}")
         return "\n\n".join(parts)
+
+    def _normalize_steps(self, value: Any) -> list[str]:
+        if isinstance(value, list):
+            return [str(item) for item in value if str(item).strip()]
+        if isinstance(value, str):
+            return [line.strip() for line in value.splitlines() if line.strip()]
+        if isinstance(value, dict):
+            return [json.dumps(value, ensure_ascii=False)]
+        if value is None:
+            return []
+        return [str(value)]
+
+    def _parse_verdict(self, value: Any) -> bool | None:
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return None
+        text = str(value).strip().lower()
+        if text in {"true", "correct", "right", "yes", "ok", "pass", "对", "正确"}:
+            return True
+        if text in {"false", "wrong", "incorrect", "no", "fail", "错", "错误"}:
+            return False
+        return None
 
     def _stringify_answer(self, value: Any) -> str:
         if isinstance(value, str):

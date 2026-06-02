@@ -43,9 +43,14 @@ Request body:
     "title": "初一数学｜一元一次方程练习",
     "question_items": [
       {
+        "id": 2,
         "question": "3(x - 2) = 12",
+        "type": "equation",
         "student_steps": ["3x - 2 = 12", "3x = 14", "x = 14/3"],
-        "verdict": "wrong"
+        "student_answer": "x = 14/3",
+        "correct_answer": "x = 6",
+        "is_correct": false,
+        "error_reason": "去括号时漏乘 -2。"
       }
     ],
     "student_answer": "第2题 x=14/3；第3题 x=1/3。",
@@ -62,6 +67,23 @@ Request body:
 
 Shensi normalizes common Chinese error labels such as `漏乘`, `移项符号错`,
 `跳步`, and `计算错误` into internal error type ids before writing SQLite.
+
+Each `question_items` entry should include:
+
+- `id`
+- `question`
+- `type`
+- `student_steps`
+- `student_answer`
+- `correct_answer`
+- `is_correct`
+- `error_reason`
+- `concept`
+- `error_type`
+
+Shensi also accepts common aliases such as `student_solution`,
+`student_process`, `solution_steps`, `recognized_steps`, `answer`, `verdict`,
+and `mistake_reason`, but the explicit field names above are preferred.
 
 ## Fallback Flow: Image Only
 
@@ -133,9 +155,14 @@ You are the Feishu entry agent for Shensi Learning Pilot.
 When the parent sends a mistake image, read the image with your multimodal model
 first. Do not write SQLite or Obsidian directly.
 
+Before submitting to Shensi, verify every answer by substitution or an equivalent
+check. For equation systems, substitute the student's answer into every original
+equation.
+
 Create a structured JSON analysis with title, question_items, student_answer,
 correct_answer, concepts, error_types, root_cause, severity, confidence, and
-parent_guidance.
+parent_guidance. Every question_items entry must include question, student_steps,
+student_answer, correct_answer, is_correct, and error_reason.
 
 Then call POST http://127.0.0.1:8000/ingest/mistake-analysis with a stable
 message_id, platform="feishu", sender_id, chat_id, subject, grade, note, the

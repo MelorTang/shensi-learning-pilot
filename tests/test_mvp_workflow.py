@@ -160,13 +160,19 @@ def test_hermes_ingest_accepts_external_analysis(tmp_path):
                     },
                     {
                         "question": "3(x - 2) = 12",
-                        "student_steps": ["3x - 2 = 12", "3x = 14", "x = 14/3"],
+                        "student_solution": "3x - 2 = 12\n3x = 14\nx = 14/3",
+                        "student_answer": "x = 14/3",
+                        "correct_answer": "x = 6",
                         "verdict": "wrong",
+                        "error_reason": "missed distributing 3 to -2",
                     },
                     {
                         "question": "5x - 7 = 2x + 8",
-                        "student_steps": ["5x - 2x = 8 - 7", "3x = 1", "x = 1/3"],
-                        "verdict": "wrong",
+                        "solution_steps": ["5x - 2x = 8 - 7", "3x = 1", "x = 1/3"],
+                        "student_answer": "x = 1/3",
+                        "correct_answer": "x = 5",
+                        "is_correct": False,
+                        "error_reason": "moved -7 without changing the sign",
                     },
                 ],
                 "student_answer": "第1题正确；第2题 x=14/3；第3题 x=1/3。",
@@ -181,7 +187,13 @@ def test_hermes_ingest_accepts_external_analysis(tmp_path):
     assert body["analysis"]["model"] == "mimo-v2.5"
     assert body["analysis"]["error_types"] == ["missed_condition", "calculation_error"]
     assert body["confirmation"]["status"] == "confirmed"
-    assert Path(body["confirmation"]["note_path"]).exists()
+    note_path = Path(body["confirmation"]["note_path"])
+    assert note_path.exists()
+    note = note_path.read_text(encoding="utf-8")
+    assert "### Question 2: 3(x - 2) = 12" in note
+    assert "3x - 2 = 12" in note
+    assert "missed distributing 3 to -2" in note
+    assert "- Result: wrong" in note
     counts = client.get("/debug/counts").json()
     assert counts["mistakes"] == 1
     assert counts["reviews"] == 3
