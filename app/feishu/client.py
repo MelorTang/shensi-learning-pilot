@@ -89,6 +89,17 @@ class FeishuClient:
             authenticated=True,
         )
 
+    def reply_interactive_card(self, *, message_id: str, card: dict[str, Any]) -> dict[str, Any]:
+        return self._json_request(
+            "POST",
+            f"/open-apis/im/v1/messages/{message_id}/reply",
+            body={
+                "msg_type": "interactive",
+                "content": json.dumps(card, ensure_ascii=False),
+            },
+            authenticated=True,
+        )
+
     def _json_request(
         self,
         method: str,

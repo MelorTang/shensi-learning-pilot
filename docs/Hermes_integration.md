@@ -58,6 +58,28 @@ Each card button should include `value.mistake_id`. The future Feishu card
 callback handler can route these actions to Shensi confirm, discard, reanalyze,
 or modify-confirm APIs without asking the parent to type IDs.
 
+Current callback endpoint:
+
+```text
+POST /feishu/card-callback
+```
+
+Implemented button actions:
+
+- `shensi_confirm`: confirm the given `mistake_id`
+- `shensi_discard`: discard the given `mistake_id`
+
+Draft button actions that return guidance for now:
+
+- `shensi_reanalyze`
+- `shensi_modify_confirm`
+
+Configure the Feishu card callback URL to:
+
+```text
+https://<your-domain>/feishu/card-callback
+```
+
 ```text
 POST http://127.0.0.1:8000/ingest/mistake-analysis
 ```

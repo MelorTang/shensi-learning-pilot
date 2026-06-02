@@ -128,6 +128,7 @@ Recommended Feishu UX:
 - Result card buttons: `确认入库`, `丢弃`, `重新分析`, `修改后入库`
 - Keep confirm/discard actions on the card, because they belong to one specific
   analysis result.
+- Feishu card callback endpoint: `POST /feishu/card-callback`
 
 Shensi now also runs a deterministic math verification layer after Hermes
 submits extracted JSON. The current MVP verifier covers common junior-high
@@ -170,6 +171,7 @@ you already have structured analysis.
 - `POST /ingest/mistake-analysis`
 - `POST /ingest/mistake-image`
 - `POST /feishu/webhook`
+- `POST /feishu/card-callback`
 - `POST /local/simulate-upload`
 - `POST /mistakes/{mistake_id}/confirm`
 - `POST /mistakes/{mistake_id}/discard`

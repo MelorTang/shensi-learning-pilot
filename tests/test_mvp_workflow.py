@@ -316,6 +316,80 @@ def test_feishu_pending_mistake_card_contract():
     assert all(item["value"]["mistake_id"] == "mistake-001" for item in actions)
 
 
+def test_feishu_card_callback_confirms_pending_mistake(tmp_path):
+    settings = Settings(
+        db_path=tmp_path / "shensi.db",
+        vault_path=tmp_path / "vault" / "Shensi-Learning-Vault",
+    )
+    client = TestClient(create_app(settings))
+    ingest = client.post(
+        "/local/simulate-upload",
+        json={
+            "message_id": "card-confirm-001",
+            "subject": "math",
+            "grade": "grade8",
+            "note": "card callback confirm",
+            "auto_confirm": False,
+        },
+    ).json()
+
+    response = client.post(
+        "/feishu/card-callback",
+        json={
+            "action": {
+                "value": {
+                    "action": "shensi_confirm",
+                    "mistake_id": ingest["mistake_id"],
+                }
+            }
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["toast"]["type"] == "success"
+    assert body["result"]["status"] == "confirmed"
+    assert client.get("/debug/counts").json()["reviews"] == 3
+
+
+def test_feishu_card_callback_discards_pending_mistake(tmp_path):
+    settings = Settings(
+        db_path=tmp_path / "shensi.db",
+        vault_path=tmp_path / "vault" / "Shensi-Learning-Vault",
+    )
+    client = TestClient(create_app(settings))
+    ingest = client.post(
+        "/local/simulate-upload",
+        json={
+            "message_id": "card-discard-001",
+            "subject": "math",
+            "grade": "grade8",
+            "note": "card callback discard",
+            "auto_confirm": False,
+        },
+    ).json()
+
+    response = client.post(
+        "/feishu/card-callback",
+        json={
+            "event": {
+                "action": {
+                    "value": {
+                        "action": "shensi_discard",
+                        "mistake_id": ingest["mistake_id"],
+                    }
+                }
+            }
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["result"]["status"] == "discarded"
+    assert client.get("/mistakes", params={"status": "discarded"}).json()["items"][0]["id"] == ingest["mistake_id"]
+    assert client.get("/debug/counts").json()["reviews"] == 0
+
+
 def test_external_analysis_math_verifier_overrides_bad_llm_verdict(tmp_path):
     image_path = tmp_path / "grade8-homework.jpg"
     image_path.write_bytes(b"fake grade8 homework image")
