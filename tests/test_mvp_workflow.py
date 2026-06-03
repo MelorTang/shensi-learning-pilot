@@ -286,6 +286,7 @@ def test_hermes_parent_friendly_latest_pending_flow(tmp_path):
     assert "curl" not in pending["reply_text"].lower()
     assert "学生答案" not in pending["reply_text"]
     assert "题目摘要" not in pending["reply_text"]
+    assert "规则验算 3 题" in pending["reply_text"]
     assert len(pending["reply_text"]) < 260
     assert pending["questions"][0]["verification_method"] == "function_substitution"
     assert pending["questions"][0]["is_correct"] is True
@@ -299,6 +300,7 @@ def test_hermes_parent_friendly_latest_pending_flow(tmp_path):
     assert card_payload["reply_text"] == ""
     assert card_payload["final_message"] == ""
     assert card_payload["suppress_followup_text"] is True
+    assert "规则验算：3/3" in card_payload["card"]["elements"][0]["text"]["content"]
     card_actions = card_payload["card"]["elements"][-1]["actions"]
     assert [item["text"]["content"] for item in card_actions] == ["确认入库", "丢弃", "重新分析", "修改后入库"]
     assert all(item["value"]["mistake_id"] == pending["mistake_id"] for item in card_actions)
@@ -501,10 +503,38 @@ def test_feishu_pending_mistake_card_contract():
             "title": "初二数学｜一次函数与方程组小测",
             "root_cause": "第3题斜率公式分子顺序反了。",
             "parent_guidance": "复习斜率公式。",
+            "confirmation_summary": {
+                "total_questions": 3,
+                "verified_questions": 2,
+                "extraction_complete": True,
+            },
+            "verification_summary": {
+                "verified_question_count": 2,
+                "unsupported_question_ids": [3],
+            },
             "questions": [
-                {"id": 1, "student_answer": "y=8", "correct_answer": "y=8", "is_correct": True},
-                {"id": 2, "student_answer": "x=4,y=6", "correct_answer": "x=4,y=6", "is_correct": True},
-                {"id": 3, "student_answer": "k=-2", "correct_answer": "k=2", "is_correct": False},
+                {
+                    "id": 1,
+                    "student_answer": "y=8",
+                    "correct_answer": "y=8",
+                    "is_correct": True,
+                    "verification_status": "verified",
+                },
+                {
+                    "id": 2,
+                    "student_answer": "x=4,y=6",
+                    "correct_answer": "x=4,y=6",
+                    "is_correct": True,
+                    "verification_status": "verified",
+                },
+                {
+                    "id": 3,
+                    "student_answer": "k=-2",
+                    "correct_answer": "k=2",
+                    "is_correct": False,
+                    "verification_status": "unsupported",
+                    "needs_parent_review": True,
+                },
             ],
         }
     )
@@ -517,6 +547,9 @@ def test_feishu_pending_mistake_card_contract():
     )
     assert "k=-2" not in card_text
     assert "k=2" not in card_text
+    assert "规则验算：2/3" in card_text
+    assert "仅模型判断：第3题" in card_text
+    assert "需确认：第3题" in card_text
     actions = card["elements"][-1]["actions"]
     assert [item["text"]["content"] for item in actions] == ["确认入库", "丢弃", "重新分析", "修改后入库"]
     assert [item["value"]["action"] for item in actions] == [
@@ -748,6 +781,13 @@ def test_external_analysis_math_verifier_overrides_bad_llm_verdict(tmp_path):
     assert body["confirmation_summary"]["needs_parent_review_questions"] == [2, 4, 5, 6, 7]
     assert body["confirmation_summary"]["needs_parent_review_count"] == 5
     assert "need parent review" in body["confirmation_summary"]["message"]
+    pending = client.get("/hermes/pending/latest").json()
+    assert pending["verification_summary"]["unsupported_question_ids"] == [7]
+    assert "只做视觉模型判断" in pending["reply_text"]
+    pending_card = client.get("/hermes/pending/latest/card").json()["card"]
+    card_summary = pending_card["elements"][0]["text"]["content"]
+    assert "规则验算：6/7" in card_summary
+    assert "仅模型判断：第7题" in card_summary
 
     confirmation = client.post(
         f"/mistakes/{body['mistake_id']}/confirm",
