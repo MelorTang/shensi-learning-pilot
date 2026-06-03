@@ -141,6 +141,15 @@ https://<your-domain>/feishu/card-callback
 POST http://127.0.0.1:8000/feishu/card-callback
 ```
 
+If Hermes does not forward card actions, Shensi can run a small card-action
+forwarder without handling normal Feishu messages:
+
+```text
+python scripts/run_feishu_ws.py --card-actions-only
+```
+
+Feishu Developer Console must subscribe the app to `card.action.trigger`.
+
 ```text
 POST http://127.0.0.1:8000/ingest/mistake-analysis
 ```

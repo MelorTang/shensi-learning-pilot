@@ -249,6 +249,8 @@ In Feishu Developer Console:
 
 - Event subscription mode: use long connection.
 - Subscribe to `im.message.receive_v1`.
+- Subscribe to `card.action.trigger` if Shensi or Hermes needs to receive
+  interactive card button clicks.
 - Click the connection verification button after the local client is running.
 
 Run the local Feishu client:
@@ -258,6 +260,32 @@ python scripts/run_feishu_ws.py
 ```
 
 Keep that terminal running while testing image uploads in Feishu.
+
+If Hermes already handles Feishu messages and Shensi only needs to receive card
+button clicks, run the Shensi long-connection client in card-action-only mode:
+
+```powershell
+python scripts/run_feishu_ws.py --card-actions-only
+```
+
+Cloud systemd user-service example:
+
+```ini
+[Unit]
+Description=Shensi Feishu Card Action Forwarder
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/admin/apps/shensi-learning-pilot
+EnvironmentFile=/home/admin/apps/shensi-learning-pilot/.env
+ExecStart=/home/admin/apps/shensi-learning-pilot/.venv/bin/python scripts/run_feishu_ws.py --card-actions-only
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+```
 
 ### Option B: Webhook URL
 
@@ -284,6 +312,7 @@ Recommended Feishu app settings for either mode:
 
 - Enable bot capability.
 - Subscribe to `im.message.receive_v1`.
+- Subscribe to `card.action.trigger` for result-card buttons.
 - Grant at least one receive-message permission that matches your scene: p2p message, group @ message, or group message.
 - Grant message resource permissions needed for downloading message resources.
 - For long connection, no public URL or encryption policy is needed.
