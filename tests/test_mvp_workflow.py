@@ -284,6 +284,9 @@ def test_hermes_parent_friendly_latest_pending_flow(tmp_path):
     assert pending["actions"]["confirm_latest"] == "/hermes/pending/latest/confirm"
     assert "确认入库" in pending["reply_text"]
     assert "curl" not in pending["reply_text"].lower()
+    assert "学生答案" not in pending["reply_text"]
+    assert "题目摘要" not in pending["reply_text"]
+    assert len(pending["reply_text"]) < 260
     assert pending["questions"][0]["verification_method"] == "function_substitution"
     assert pending["questions"][0]["is_correct"] is True
     assert pending["questions"][0]["needs_parent_review"] is False
