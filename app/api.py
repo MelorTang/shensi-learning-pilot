@@ -12,6 +12,7 @@ from app.models.schemas import (
     LocalUploadRequest,
     ReportDraftRequest,
 )
+from app.feishu.cards import build_pending_mistake_card
 from app.services.hermes_service import HermesService
 from app.services.sqlite_service import SQLiteService
 from app.services.workflow_service import MistakeWorkflowService
@@ -144,6 +145,20 @@ def hermes_stats(request: Request, days: int = Query(default=14, ge=1, le=365)) 
 def hermes_latest_pending(request: Request) -> dict[str, Any]:
     sqlite = SQLiteService(_settings(request).db_path)
     return HermesService(sqlite).latest_pending()
+
+
+@router.get("/hermes/pending/latest/card")
+def hermes_latest_pending_card(request: Request) -> dict[str, Any]:
+    sqlite = SQLiteService(_settings(request).db_path)
+    pending = HermesService(sqlite).latest_pending()
+    if not pending["found"]:
+        return pending
+    return {
+        "found": True,
+        "mistake_id": pending["mistake_id"],
+        "card": build_pending_mistake_card(pending),
+        "reply_text": pending["reply_text"],
+    }
 
 
 @router.post("/hermes/pending/latest/confirm")

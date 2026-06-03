@@ -278,6 +278,12 @@ def test_hermes_parent_friendly_latest_pending_flow(tmp_path):
     assert "curl" not in pending["reply_text"].lower()
     assert pending["questions"][0]["verification_method"] == "function_substitution"
     assert pending["questions"][2]["is_correct"] is False
+    card_payload = client.get("/hermes/pending/latest/card").json()
+    assert card_payload["found"] is True
+    assert card_payload["mistake_id"] == pending["mistake_id"]
+    card_actions = card_payload["card"]["elements"][-1]["actions"]
+    assert [item["text"]["content"] for item in card_actions] == ["确认入库", "丢弃", "重新分析", "修改后入库"]
+    assert all(item["value"]["mistake_id"] == pending["mistake_id"] for item in card_actions)
 
     confirmation = client.post(
         "/hermes/pending/latest/confirm",

@@ -58,7 +58,17 @@ Each card button should include `value.mistake_id`. The future Feishu card
 callback handler can route these actions to Shensi confirm, discard, reanalyze,
 or modify-confirm APIs without asking the parent to type IDs.
 
-Current callback endpoint:
+Shensi exposes the latest pending card JSON for Hermes:
+
+```text
+GET /hermes/pending/latest/card
+```
+
+Hermes should call this after `shensi-antigravity-submit` succeeds, then send
+the returned `card` as a Feishu interactive card. This is the missing step if
+Hermes currently replies with plain text only.
+
+Shensi card action callback endpoint:
 
 ```text
 POST /feishu/card-callback
@@ -74,10 +84,20 @@ Draft button actions that return guidance for now:
 - `shensi_reanalyze`
 - `shensi_modify_confirm`
 
-Configure the Feishu card callback URL to:
+There are two callback modes:
+
+- HTTP callback mode: configure the Feishu card callback URL to:
 
 ```text
 https://<your-domain>/feishu/card-callback
+```
+
+- Long-connection mode: no domain is required. Hermes receives
+  `card.action.trigger` through the Feishu long connection and forwards the
+  payload to local Shensi:
+
+```text
+POST http://127.0.0.1:8000/feishu/card-callback
 ```
 
 ```text
@@ -245,6 +265,15 @@ After Shensi returns status="waiting_confirmation", call
 GET /hermes/pending/latest and show the parent its `reply_text`. Do not paste
 raw JSON, curl commands, local file paths, stack traces, or API details unless
 the parent explicitly asks for debug information.
+
+If Hermes can send Feishu interactive cards, prefer:
+
+```text
+GET /hermes/pending/latest/card
+```
+
+Then send the returned `card` object as `msg_type=interactive`. If card sending
+fails, fall back to the plain `reply_text`.
 
 If Shensi returns `auto_confirm_blocked=true`, do not retry auto-confirm. Show
 the parent a short summary and wait for explicit confirmation, discard, or

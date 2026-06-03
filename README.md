@@ -178,6 +178,7 @@ you already have structured analysis.
 - `GET /mistakes`
 - `GET /reviews/today`
 - `GET /hermes/pending/latest`
+- `GET /hermes/pending/latest/card`
 - `POST /hermes/pending/latest/confirm`
 - `POST /hermes/pending/latest/discard`
 - `POST /reports/daily/regenerate`
