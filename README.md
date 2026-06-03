@@ -220,8 +220,26 @@ Defaults:
 - Raw images: `vault/Shensi-Learning-Vault/08-Raw-Images`
 - Raw payloads and AI JSON: `vault/Shensi-Learning-Vault/09-AI-Raw-JSON`
 - Mistake cards: `vault/Shensi-Learning-Vault/02-Mistakes`
+- Mistake-driven concept cards: `vault/Shensi-Learning-Vault/03-Concepts`
+- Static curriculum cards: `vault/Shensi-Learning-Vault/05-Curriculum`
 - Daily reports: `vault/Shensi-Learning-Vault/04-Reports/Daily`
 - Weekly reports: `vault/Shensi-Learning-Vault/04-Reports/Weekly`
+
+## Knowledge Base
+
+Confirmed mistakes now maintain two lightweight Markdown knowledge layers:
+
+- `03-Concepts/<学科>`: mistake-driven concept cards. These summarize the latest
+  mistake pattern, common error types, parent guidance, and linked confirmed
+  mistake notes for that concept.
+- `05-Curriculum/<学科>`: static curriculum cards. These hold stable definitions,
+  learning steps, common pitfalls, and parent guidance. They are created lazily
+  from confirmed mistakes, so the knowledge base grows around real weak points
+  instead of importing full textbooks up front.
+
+The first built-in static profiles focus on junior-high math concepts such as
+一元一次方程、一次函数求值、二元一次方程组、斜率公式、去括号、移项. Unknown concepts
+still get a generic curriculum card that can be edited later in Obsidian.
 
 ## Maintenance
 

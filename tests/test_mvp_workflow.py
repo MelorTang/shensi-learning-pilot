@@ -45,6 +45,13 @@ def test_local_workflow_full_cycle(tmp_path):
     assert Path(result["confirmation"]["note_path"]).exists()
     assert Path(result["confirmation"]["daily_report"]["note_path"]).exists()
     assert Path(result["confirmation"]["weekly_report"]["note_path"]).exists()
+    concept_notes = list((settings.vault_path / "03-Concepts" / "数学").glob("*.md"))
+    curriculum_notes = list((settings.vault_path / "05-Curriculum" / "数学").glob("*.md"))
+    assert concept_notes
+    assert curriculum_notes
+    assert "## Static Knowledge" in concept_notes[0].read_text(encoding="utf-8")
+    assert "## Related Mistakes" in concept_notes[0].read_text(encoding="utf-8")
+    assert "## Core Idea" in curriculum_notes[0].read_text(encoding="utf-8")
 
     duplicate = workflow.submit_local(
         LocalUploadRequest(

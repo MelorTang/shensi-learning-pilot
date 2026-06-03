@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import date
 from typing import Any
 import json
 from pathlib import Path
@@ -30,6 +29,55 @@ VAULT_DIRECTORIES = (
     "99-System/prompts",
     "99-System/templates",
 )
+
+SUBJECT_DIR_NAMES = {
+    "math": "数学",
+    "mathematics": "数学",
+    "数学": "数学",
+    "english": "英语",
+    "英语": "英语",
+    "chinese": "语文",
+    "语文": "语文",
+}
+
+CURRICULUM_PROFILES = {
+    "一元一次方程": {
+        "definition": "只含一个未知数，且未知数最高次数为 1 的方程。",
+        "steps": ["去分母", "去括号", "移项", "合并同类项", "系数化为 1"],
+        "pitfalls": ["移项后符号忘记改变", "去括号时漏乘括号内某一项", "等式两边没有做同样的运算"],
+        "parent_guidance": "让孩子每一步都说出“我对等式两边做了什么”，先保证等式变形合法。",
+    },
+    "一次函数求值": {
+        "definition": "把给定的 x 代入 y = kx + b，并按运算顺序求出 y。",
+        "steps": ["确认 x 的值", "整体代入表达式", "先乘除后加减", "负数代入时加括号"],
+        "pitfalls": ["负数代入漏括号", "把 -3x 看成 -3+x", "先加减后乘除"],
+        "parent_guidance": "让孩子先口头复述“代入、乘法、加减”三步，再动笔计算。",
+    },
+    "二元一次方程组": {
+        "definition": "含两个未知数，且每个方程都是一次方程的方程组。",
+        "steps": ["选择代入法或加减消元法", "消去一个未知数", "求出第一个未知数", "回代求另一个未知数", "代回原方程验算"],
+        "pitfalls": ["加减消元时符号处理错误", "回代时抄错数", "只求出一个未知数就停止"],
+        "parent_guidance": "引导孩子在最后把 x、y 同时代回两个原方程，检查左右是否相等。",
+    },
+    "斜率公式": {
+        "definition": "两点 A(x1,y1)、B(x2,y2) 的直线斜率 k = (y2-y1)/(x2-x1)。",
+        "steps": ["标出两个点的 x、y", "写出 y 的差", "写出 x 的差", "保持同一方向相减", "化简结果"],
+        "pitfalls": ["分子分母顺序不一致", "把 x 差和 y 差写反", "负号处理错误"],
+        "parent_guidance": "让孩子在草稿纸上先标出 x1、y1、x2、y2，再代公式。",
+    },
+    "去括号": {
+        "definition": "根据乘法分配律把括号外的因数乘到括号内每一项。",
+        "steps": ["看清括号前的符号和系数", "把系数乘给括号内每一项", "括号前是负号时每一项都变号", "再合并同类项"],
+        "pitfalls": ["只乘第一项", "括号前负号只改了一项", "漏写常数项"],
+        "parent_guidance": "让孩子用箭头标出括号外的数分别乘向括号内每一项。",
+    },
+    "移项": {
+        "definition": "把等式一边的项移到另一边，移动后该项符号改变。",
+        "steps": ["确定要移动的项", "跨过等号改变符号", "同类项放在同一边", "合并同类项"],
+        "pitfalls": ["跨等号不变号", "把乘除运算误当成移项", "漏移常数项"],
+        "parent_guidance": "提醒孩子只要“跨过等号”，加减号就要反过来。",
+    },
+}
 
 
 class ObsidianService:
@@ -117,7 +165,7 @@ class ObsidianService:
     def write_mistake_note(self, analysis: dict[str, Any]) -> Path:
         subject = str(analysis.get("subject", "math"))
         mistake_id = str(analysis["mistake_id"])
-        safe_subject = self._safe_name(subject)
+        safe_subject = self._subject_dir(subject)
         title = self._safe_name(str(analysis.get("title") or mistake_id))
         path = self.vault_path / "02-Mistakes" / safe_subject / f"{analysis['date']}-{title}-{mistake_id}.md"
         image_file = Path(str(analysis.get("image_path", ""))).name
@@ -264,10 +312,30 @@ status: confirmed
             return ""
         return str(value)
 
-    def write_concept_note(self, concept: dict[str, Any]) -> Path:
-        subject = self._safe_name(str(concept.get("subject", "math")))
+    def concept_note_path(self, concept: dict[str, Any]) -> Path:
+        subject = self._subject_dir(str(concept.get("subject", "math")))
         name = str(concept["name"])
-        path = self.vault_path / "03-Concepts" / subject / f"{self._safe_name(name)}.md"
+        return self.vault_path / "03-Concepts" / subject / f"{self._safe_name(name)}.md"
+
+    def curriculum_note_path(self, concept: dict[str, Any]) -> Path:
+        subject = self._subject_dir(str(concept.get("subject", "math")))
+        name = str(concept["name"])
+        return self.vault_path / "05-Curriculum" / subject / f"{self._safe_name(name)}.md"
+
+    def write_concept_note(
+        self,
+        concept: dict[str, Any],
+        *,
+        related_mistakes: list[dict[str, Any]] | None = None,
+        analysis: dict[str, Any] | None = None,
+    ) -> Path:
+        name = str(concept["name"])
+        path = self.concept_note_path(concept)
+        related_mistakes = related_mistakes or []
+        curriculum_link = self.curriculum_note_path(concept).stem
+        error_types = ", ".join((analysis or {}).get("error_types", [])) or "待积累"
+        root_cause = (analysis or {}).get("root_cause") or "待从更多错题中归纳。"
+        parent_guidance = (analysis or {}).get("parent_guidance") or "待从更多错题中归纳。"
         content = f"""---
 type: concept
 subject: "{concept.get("subject", "")}"
@@ -277,13 +345,65 @@ status: "{concept.get("status", "active")}"
 
 # {name}
 
-## Description
+## Static Knowledge
 
-Auto-created from confirmed mistake analysis.
+[[{curriculum_link}]]
+
+## Mistake Pattern
+
+{root_cause}
+
+## Common Error Types
+
+{error_types}
+
+## Parent Guidance
+
+{parent_guidance}
 
 ## Related Mistakes
 
-Updated by SQLite relationships.
+{self._format_related_mistakes(related_mistakes)}
+"""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        return path
+
+    def write_curriculum_note(self, concept: dict[str, Any]) -> Path:
+        name = str(concept["name"])
+        path = self.curriculum_note_path(concept)
+        if path.exists():
+            return path
+
+        profile = CURRICULUM_PROFILES.get(name, {})
+        content = f"""---
+type: curriculum
+subject: "{concept.get("subject", "")}"
+grade: "{concept.get("grade", "")}"
+status: active
+---
+
+# {name}
+
+## Core Idea
+
+{profile.get("definition") or "这个知识点由已确认错题触发创建，后续可补充教材定义和例题。"}
+
+## Learning Steps
+
+{self._format_bullets(profile.get("steps") or ["先理解概念", "再完成基础例题", "最后回看相关错题"])}
+
+## Common Pitfalls
+
+{self._format_bullets(profile.get("pitfalls") or ["概念边界不稳定", "解题步骤跳步", "检查环节不足"])}
+
+## Parent Guidance
+
+{profile.get("parent_guidance") or "让孩子先说清楚题目考的是什么，再说明每一步为什么可以这样做。"}
+
+## Linked Mistake Concepts
+
+[[{self.concept_note_path(concept).stem}]]
 """
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
@@ -304,3 +424,24 @@ Updated by SQLite relationships.
     def _safe_name(self, value: str) -> str:
         cleaned = "".join(ch if ch.isalnum() or ch in ("-", "_") else "-" for ch in value.strip())
         return cleaned.strip("-") or "untitled"
+
+    def _subject_dir(self, subject: str) -> str:
+        return SUBJECT_DIR_NAMES.get(subject.strip().lower(), self._safe_name(subject))
+
+    def _format_bullets(self, items: Any) -> str:
+        if not isinstance(items, list):
+            return f"- {items}"
+        return "\n".join(f"- {item}" for item in items) or "- 待补充"
+
+    def _format_related_mistakes(self, mistakes: list[dict[str, Any]]) -> str:
+        if not mistakes:
+            return "待关联已确认错题。"
+        lines = []
+        for item in mistakes[:20]:
+            note_path = Path(str(item.get("note_path") or ""))
+            title = item.get("title") or item.get("id") or "未命名错题"
+            if note_path.name:
+                lines.append(f"- [[{note_path.stem}|{title}]]")
+            else:
+                lines.append(f"- {title}")
+        return "\n".join(lines)

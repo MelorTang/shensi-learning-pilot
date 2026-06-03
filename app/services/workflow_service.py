@@ -368,7 +368,12 @@ class MistakeWorkflowService:
             }
         )
         for concept_name in final_analysis.get("concepts", []):
-            concept_id = self._stable_id("concept", final_analysis["subject"], final_analysis["grade"], concept_name)
+            concept_id = self._stable_id(
+                "concept",
+                final_analysis["subject"],
+                final_analysis["grade"],
+                concept_name,
+            )
             concept = {
                 "id": concept_id,
                 "subject": final_analysis["subject"],
@@ -379,10 +384,16 @@ class MistakeWorkflowService:
                 "created_at": now,
                 "updated_at": now,
             }
-            concept_note = self.obsidian.write_concept_note(concept)
-            concept["note_path"] = str(concept_note)
+            self.obsidian.write_curriculum_note(concept)
+            concept["note_path"] = str(self.obsidian.concept_note_path(concept))
             self.sqlite.upsert_concept(concept)
             self.sqlite.link_mistake_concept(mistake_id, concept_id)
+            related_mistakes = self.sqlite.concept_mistakes(concept_name)
+            self.obsidian.write_concept_note(
+                concept,
+                related_mistakes=related_mistakes,
+                analysis=final_analysis,
+            )
         for error_type in final_analysis.get("error_types", []):
             self.sqlite.link_mistake_error_type(mistake_id, error_type)
         base_date = self.review.parse_date(final_analysis["date"])
