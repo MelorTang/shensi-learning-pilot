@@ -51,7 +51,7 @@ def build_pending_mistake_card(pending: dict[str, Any]) -> dict[str, Any]:
                 "tag": "div",
                 "text": {
                     "tag": "lark_md",
-                    "content": f"**主要原因**：{pending['root_cause']}",
+                    "content": f"**主要原因**：{_compact_text(pending['root_cause'])}",
                 },
             }
         )
@@ -61,7 +61,7 @@ def build_pending_mistake_card(pending: dict[str, Any]) -> dict[str, Any]:
                 "tag": "div",
                 "text": {
                     "tag": "lark_md",
-                    "content": f"**家长引导**：{pending['parent_guidance']}",
+                    "content": f"**家长引导**：{_compact_text(pending['parent_guidance'])}",
                 },
             }
         )
@@ -104,6 +104,13 @@ def _format_ids(ids: list[Any]) -> str:
     if not ids:
         return "无"
     return "、".join(f"第{item}题" for item in ids)
+
+
+def _compact_text(text: Any, limit: int = 90) -> str:
+    value = " ".join(str(text).split())
+    if len(value) <= limit:
+        return value
+    return f"{value[:limit].rstrip()}..."
 
 
 def _question_summary_lines(questions: list[dict[str, Any]]) -> list[str]:

@@ -339,6 +339,10 @@ fails, fall back to the plain `reply_text`.
 If the response includes `feishu_message`, prefer sending that exact envelope:
 `msg_type=interactive`, `content=feishu_message.content`.
 
+After a card is sent successfully, do not also send the long pending
+`reply_text`; the card is the parent-facing summary. At most send one short
+status sentence such as "分析完成，请在卡片里确认入库或丢弃。"
+
 If Hermes cannot send interactive cards and pastes JSON as plain text, call
 `POST /hermes/pending/latest/card/send` with the current Feishu message id or
 chat id so Shensi sends the card directly.
@@ -350,6 +354,9 @@ modification.
 If the parent clicks a result card button, route by `value.action`. If the
 parent types a fallback command like "确认入库" or "丢弃", call
 POST /hermes/pending/latest/confirm or POST /hermes/pending/latest/discard.
+When Shensi receives `card.action.trigger`, it returns a toast and also tries to
+send a normal Feishu text reply back to the card message or chat, so the action
+has a visible conversation record.
 If the parent edits fields, call confirm with action="modify" and put allowed edits
 in overrides. If there are multiple pending items and the parent is ambiguous,
 ask which one they mean before confirming or discarding.

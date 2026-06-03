@@ -67,14 +67,22 @@ async def receive_card_callback(request: Request) -> dict[str, Any]:
                 str(mistake_id),
                 ConfirmationRequest(action="confirm", confirmed_by="feishu_card"),
             )
-            return _card_callback_response("已确认入库。错题卡和复习任务已更新。", result)
+            message = "已确认入库。错题卡和 D+1/D+3/D+7 复习任务已更新。"
+            delivery = _try_reply_to_card_action(settings, payload, message)
+            return _card_callback_response(message, result, delivery)
         if action == "shensi_discard":
             result = workflow.discard_mistake(str(mistake_id), confirmed_by="feishu_card")
-            return _card_callback_response("已丢弃这条分析。", result)
+            message = "已丢弃这条分析，不会写入错题卡或复习计划。"
+            delivery = _try_reply_to_card_action(settings, payload, message)
+            return _card_callback_response(message, result, delivery)
         if action == "shensi_reanalyze":
-            return _card_callback_response("重新分析功能下一步接入。现在可以重新发送图片并点击“慎思分析”。")
+            message = "重新分析功能正在接入。现在可以重新发送图片，再点击“慎思分析”。"
+            delivery = _try_reply_to_card_action(settings, payload, message)
+            return _card_callback_response(message, delivery=delivery)
         if action == "shensi_modify_confirm":
-            return _card_callback_response("修改后入库功能下一步接入。现在可以文字说明要修改的地方。")
+            message = "修改后入库功能正在接入。现在可以直接回复要修改的题号和内容。"
+            delivery = _try_reply_to_card_action(settings, payload, message)
+            return _card_callback_response(message, delivery=delivery)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -129,7 +137,73 @@ def _as_dict(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _card_callback_response(message: str, result: dict[str, Any] | None = None) -> dict[str, Any]:
+def _try_reply_to_card_action(
+    settings: Settings,
+    payload: dict[str, Any],
+    message: str,
+) -> dict[str, Any] | None:
+    client = FeishuClient(settings)
+    if not client.is_configured():
+        return None
+
+    try:
+        message_id = _extract_first_string(
+            payload,
+            (
+                ("event", "context", "open_message_id"),
+                ("event", "open_message_id"),
+                ("context", "open_message_id"),
+                ("open_message_id",),
+                ("message_id",),
+            ),
+        )
+        if message_id:
+            response = client.reply_text(message_id=message_id, text=message)
+            return {"mode": "reply", "message_id": message_id, "feishu_response": response}
+
+        chat_id = _extract_first_string(
+            payload,
+            (
+                ("event", "context", "open_chat_id"),
+                ("event", "open_chat_id"),
+                ("context", "open_chat_id"),
+                ("open_chat_id",),
+                ("chat_id",),
+            ),
+        )
+        if chat_id:
+            response = client.send_text(
+                receive_id=chat_id,
+                receive_id_type="chat_id",
+                text=message,
+            )
+            return {"mode": "send", "receive_id": chat_id, "feishu_response": response}
+    except FeishuClientError as exc:
+        return {"mode": "failed", "error": str(exc)}
+    return None
+
+
+def _extract_first_string(
+    payload: dict[str, Any],
+    paths: tuple[tuple[str, ...], ...],
+) -> str | None:
+    for path in paths:
+        current: Any = payload
+        for key in path:
+            if not isinstance(current, dict):
+                current = None
+                break
+            current = current.get(key)
+        if isinstance(current, str) and current:
+            return current
+    return None
+
+
+def _card_callback_response(
+    message: str,
+    result: dict[str, Any] | None = None,
+    delivery: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "toast": {
             "type": "success",
@@ -139,4 +213,6 @@ def _card_callback_response(message: str, result: dict[str, Any] | None = None) 
     }
     if result is not None:
         payload["result"] = result
+    if delivery is not None:
+        payload["delivery"] = delivery
     return payload

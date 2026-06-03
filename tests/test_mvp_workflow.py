@@ -505,10 +505,12 @@ def test_feishu_pending_mistake_card_contract():
     assert all(item["value"]["mistake_id"] == "mistake-001" for item in actions)
 
 
-def test_feishu_card_callback_confirms_pending_mistake(tmp_path):
+def test_feishu_card_callback_confirms_pending_mistake(tmp_path, monkeypatch):
     settings = Settings(
         db_path=tmp_path / "shensi.db",
         vault_path=tmp_path / "vault" / "Shensi-Learning-Vault",
+        feishu_app_id="cli_test_app",
+        feishu_app_secret="cli_test_secret",
     )
     client = TestClient(create_app(settings))
     ingest = client.post(
@@ -521,10 +523,23 @@ def test_feishu_card_callback_confirms_pending_mistake(tmp_path):
             "auto_confirm": False,
         },
     ).json()
+    replies: dict[str, str] = {}
+
+    def fake_reply_text(self, *, message_id, text):
+        replies["message_id"] = message_id
+        replies["text"] = text
+        return {"code": 0, "data": {"message_id": "om_confirm_reply"}}
+
+    monkeypatch.setattr("app.feishu.webhook.FeishuClient.reply_text", fake_reply_text)
 
     response = client.post(
         "/feishu/card-callback",
         json={
+            "event": {
+                "context": {
+                    "open_message_id": "om_result_card",
+                }
+            },
             "action": {
                 "value": {
                     "action": "shensi_confirm",
@@ -538,6 +553,9 @@ def test_feishu_card_callback_confirms_pending_mistake(tmp_path):
     body = response.json()
     assert body["toast"]["type"] == "success"
     assert body["result"]["status"] == "confirmed"
+    assert body["delivery"]["mode"] == "reply"
+    assert replies["message_id"] == "om_result_card"
+    assert "已确认入库" in replies["text"]
     assert client.get("/debug/counts").json()["reviews"] == 3
 
 
