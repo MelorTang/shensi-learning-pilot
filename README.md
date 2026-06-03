@@ -279,6 +279,7 @@ After=network.target
 Type=simple
 WorkingDirectory=/home/admin/apps/shensi-learning-pilot
 EnvironmentFile=/home/admin/apps/shensi-learning-pilot/.env
+EnvironmentFile=-/home/admin/.hermes/.env
 ExecStart=/home/admin/apps/shensi-learning-pilot/.venv/bin/python scripts/run_feishu_ws.py --card-actions-only
 Restart=always
 RestartSec=5
@@ -317,6 +318,9 @@ Recommended Feishu app settings for either mode:
 - Grant message resource permissions needed for downloading message resources.
 - For long connection, no public URL or encryption policy is needed.
 - For webhook mode, keep event encryption disabled for the MVP, or leave `SHENSI_FEISHU_ENCRYPT_KEY` empty.
+- Shensi prefers `SHENSI_FEISHU_APP_ID` / `SHENSI_FEISHU_APP_SECRET`, but also accepts
+  Hermes-style `FEISHU_APP_ID` / `FEISHU_APP_SECRET` and `LARK_APP_ID` /
+  `LARK_APP_SECRET`.
 
 When a user sends an image, Feishu includes an `image_key` in the message `content`. The app uses `message_id + image_key` to download the image into `08-Raw-Images`. If credentials are missing or download fails, the local stub image is used so the MVP remains runnable.
 

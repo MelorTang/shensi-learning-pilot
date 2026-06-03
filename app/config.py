@@ -35,6 +35,14 @@ def _bool(value: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _env_first(*keys: str, default: str = "") -> str:
+    for key in keys:
+        value = os.getenv(key)
+        if value:
+            return value
+    return default
+
+
 @dataclass(frozen=True)
 class Settings:
     app_name: str = "shensi-learning-pilot"
@@ -66,11 +74,28 @@ class Settings:
                 os.getenv("SHENSI_VAULT_PATH", "vault/Shensi-Learning-Vault")
             ),
             allowed_parent_ids=_csv(os.getenv("SHENSI_ALLOWED_PARENT_IDS", "")),
-            feishu_app_id=os.getenv("SHENSI_FEISHU_APP_ID", ""),
-            feishu_app_secret=os.getenv("SHENSI_FEISHU_APP_SECRET", ""),
-            feishu_base_url=os.getenv("SHENSI_FEISHU_BASE_URL", "https://open.feishu.cn"),
-            feishu_verification_token=os.getenv("SHENSI_FEISHU_VERIFICATION_TOKEN", ""),
-            feishu_encrypt_key=os.getenv("SHENSI_FEISHU_ENCRYPT_KEY", ""),
+            feishu_app_id=_env_first("SHENSI_FEISHU_APP_ID", "FEISHU_APP_ID", "LARK_APP_ID"),
+            feishu_app_secret=_env_first(
+                "SHENSI_FEISHU_APP_SECRET",
+                "FEISHU_APP_SECRET",
+                "LARK_APP_SECRET",
+            ),
+            feishu_base_url=_env_first(
+                "SHENSI_FEISHU_BASE_URL",
+                "FEISHU_BASE_URL",
+                "LARK_BASE_URL",
+                default="https://open.feishu.cn",
+            ),
+            feishu_verification_token=_env_first(
+                "SHENSI_FEISHU_VERIFICATION_TOKEN",
+                "FEISHU_VERIFICATION_TOKEN",
+                "LARK_VERIFICATION_TOKEN",
+            ),
+            feishu_encrypt_key=_env_first(
+                "SHENSI_FEISHU_ENCRYPT_KEY",
+                "FEISHU_ENCRYPT_KEY",
+                "LARK_ENCRYPT_KEY",
+            ),
             feishu_download_resources=_bool(
                 os.getenv("SHENSI_FEISHU_DOWNLOAD_RESOURCES", "true")
             ),
