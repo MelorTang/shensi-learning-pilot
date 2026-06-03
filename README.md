@@ -241,6 +241,30 @@ The first built-in static profiles focus on junior-high math concepts such as
 一元一次方程、一次函数求值、二元一次方程组、斜率公式、去括号、移项. Unknown concepts
 still get a generic curriculum card that can be edited later in Obsidian.
 
+Committed static curriculum source files live outside the runtime vault:
+
+```text
+knowledge/curriculum/数学/*.md
+```
+
+This keeps public, non-personal subject knowledge in GitHub while keeping
+student data, raw images, generated mistake notes, and SQLite out of Git. After
+pulling new curriculum cards on the cloud server, sync them into the Obsidian
+vault:
+
+```bash
+python scripts/sync_curriculum.py
+```
+
+Preview without writing:
+
+```bash
+python scripts/sync_curriculum.py --dry-run
+```
+
+The sync script skips `README.md` and files beginning with `_`, and only copies
+Markdown files whose frontmatter contains `type: curriculum`.
+
 ## Maintenance
 
 Raw Feishu images are a cache, not the long-term knowledge source. Once a
