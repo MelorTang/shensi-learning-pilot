@@ -150,6 +150,16 @@ python scripts/run_feishu_ws.py --card-actions-only
 
 Feishu Developer Console must subscribe the app to `card.action.trigger`.
 
+Cloud deployment note:
+
+- `shensi-feishu-card.service` should load both
+  `/home/admin/apps/shensi-learning-pilot/.env` and `/home/admin/.hermes/.env`.
+- `shensi.service` must load the same two environment files when Shensi is the
+  process that sends Feishu interactive cards.
+- Otherwise the workflow can reach `waiting_confirmation`, but
+  `/hermes/pending/latest/card/send` may fail with `HTTP 502` because the
+  running FastAPI process does not have Feishu credentials in its environment.
+
 ```text
 POST http://127.0.0.1:8000/ingest/mistake-analysis
 ```

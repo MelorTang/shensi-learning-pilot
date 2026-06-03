@@ -370,6 +370,38 @@ RestartSec=5
 WantedBy=default.target
 ```
 
+Important cloud note:
+
+- `shensi-feishu-card.service` should load both project `.env` and
+  `~/.hermes/.env`.
+- `shensi.service` must also load both files if Shensi itself needs to send
+  Feishu interactive cards through `/hermes/pending/latest/card/send`.
+- If `shensi.service` only loads the project `.env`, the analysis may finish
+  and enter `waiting_confirmation`, but card delivery can still fail with
+  `HTTP 502` because the FastAPI process cannot read `FEISHU_APP_ID` /
+  `FEISHU_APP_SECRET`.
+
+Cloud `shensi.service` example:
+
+```ini
+[Unit]
+Description=Shensi Learning Pilot FastAPI
+After=network.target
+
+[Service]
+Type=simple
+User=admin
+WorkingDirectory=/home/admin/apps/shensi-learning-pilot
+EnvironmentFile=/home/admin/apps/shensi-learning-pilot/.env
+EnvironmentFile=-/home/admin/.hermes/.env
+ExecStart=/home/admin/apps/shensi-learning-pilot/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
 ### Option B: Webhook URL
 
 Use this when you have a public HTTPS domain or tunnel. The app can receive Feishu message events at:
@@ -426,5 +458,15 @@ git pull
 source .venv/bin/activate
 python -m pytest
 sudo systemctl restart shensi
+systemctl --user restart shensi-feishu-card
 curl http://127.0.0.1:8000/health
+```
+
+If Feishu card delivery fails after analysis completes, check:
+
+```bash
+sudo systemctl cat shensi
+sudo tr '\0' '\n' </proc/$(pgrep -f "uvicorn app.main:app" | head -1)/environ | grep -E 'FEISHU_APP_ID|FEISHU_APP_SECRET|LARK_APP_ID|LARK_APP_SECRET'
+tail -n 80 ~/.hermes/logs/shensi-feishu-analysis-latest.log
+tail -n 120 ~/.hermes/logs/shensi-antigravity-submit.log
 ```
