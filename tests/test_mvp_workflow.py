@@ -246,7 +246,7 @@ def test_hermes_parent_friendly_latest_pending_flow(tmp_path):
                     {
                         "id": 1,
                         "question": "已知一次函数 y = -3x + 2，求当 x = -2 时 y 的值。",
-                        "student_answer": "y = 8",
+                        "student_answer": "y=-3×(-2)+2=6+2=8",
                         "is_correct": True,
                     },
                     {
@@ -277,6 +277,8 @@ def test_hermes_parent_friendly_latest_pending_flow(tmp_path):
     assert "确认入库" in pending["reply_text"]
     assert "curl" not in pending["reply_text"].lower()
     assert pending["questions"][0]["verification_method"] == "function_substitution"
+    assert pending["questions"][0]["is_correct"] is True
+    assert pending["questions"][0]["needs_parent_review"] is False
     assert pending["questions"][2]["is_correct"] is False
     card_payload = client.get("/hermes/pending/latest/card").json()
     assert card_payload["found"] is True

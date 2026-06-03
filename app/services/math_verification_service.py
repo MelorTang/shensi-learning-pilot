@@ -721,9 +721,18 @@ class MathVerificationService:
     def _parse_assignments(self, text: str) -> dict[str, Fraction]:
         normalized = self._normalize_text(text)
         assignments: dict[str, Fraction] = {}
-        for variable, value in re.findall(r"\b([xyk])\s*=\s*([+-]?\d+(?:/\d+)?(?:\.\d+)?)", normalized):
+        delimiters = re.compile(r"[,，;；\n。]")
+        pattern = re.compile(r"(?<![A-Za-z0-9_+\-*/])([xyk])\s*=")
+        for match in pattern.finditer(normalized):
+            variable = match.group(1)
+            remainder = normalized[match.end() :]
+            delimiter = delimiters.search(remainder)
+            segment = remainder[: delimiter.start()] if delimiter else remainder
+            values = re.findall(r"([+-]?\d+(?:/\d+)?(?:\.\d+)?)", segment)
+            if not values:
+                continue
             try:
-                assignments[variable] = self._parse_number(value)
+                assignments[variable] = self._parse_number(values[-1])
             except ValueError:
                 continue
         return assignments
