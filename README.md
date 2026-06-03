@@ -223,6 +223,44 @@ Defaults:
 - Daily reports: `vault/Shensi-Learning-Vault/04-Reports/Daily`
 - Weekly reports: `vault/Shensi-Learning-Vault/04-Reports/Weekly`
 
+## Maintenance
+
+Raw Feishu images are a cache, not the long-term knowledge source. Once a
+mistake has been analyzed and confirmed, the durable data is in SQLite, raw JSON,
+and Markdown notes. To keep a small cloud disk healthy, prune old raw images on a
+fixed retention window.
+
+Preview files older than 90 days:
+
+```bash
+python scripts/prune_raw_images.py --days 90
+```
+
+Delete files older than 90 days:
+
+```bash
+python scripts/prune_raw_images.py --days 90 --apply
+```
+
+Suggested cloud cron:
+
+```cron
+15 3 * * 0 cd /home/admin/apps/shensi-learning-pilot && mkdir -p logs && .venv/bin/python scripts/prune_raw_images.py --days 90 --apply >> logs/prune_raw_images.log 2>&1
+```
+
+For development or pre-production reset, remove SQLite and the generated vault,
+then reinitialize empty storage:
+
+```bash
+python scripts/reset_storage.py --yes
+```
+
+To keep the Obsidian vault and only reset SQLite:
+
+```bash
+python scripts/reset_storage.py --yes --keep-vault
+```
+
 ## Configuration
 
 Copy `.env.example` to `.env` when local overrides are needed. The app also runs with defaults.
