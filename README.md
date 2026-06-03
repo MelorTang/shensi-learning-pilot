@@ -194,6 +194,11 @@ you already have structured analysis.
 - `GET /hermes/concepts/{concept_name}/mistakes`
 - `POST /hermes/reports/draft`
 
+`GET /hermes/pending/latest/card` returns both the raw card object and a
+Feishu-ready `feishu_message` envelope with `msg_type="interactive"` and
+`content` as the card JSON string. Hermes should send that envelope through the
+Feishu send/reply tool instead of pasting JSON into chat.
+
 ## Generated Files
 
 Defaults:

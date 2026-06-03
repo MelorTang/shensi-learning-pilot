@@ -75,6 +75,20 @@ Hermes should call this after `shensi-antigravity-submit` succeeds, then send
 the returned `card` as a Feishu interactive card. This is the missing step if
 Hermes currently replies with plain text only.
 
+The response also includes a Feishu-ready envelope:
+
+```json
+{
+  "feishu_message": {
+    "msg_type": "interactive",
+    "content": "<JSON string of the card>"
+  }
+}
+```
+
+When Hermes has a Feishu send/reply tool, pass `feishu_message.msg_type` and
+`feishu_message.content` to that tool. Do not paste the card JSON as plain text.
+
 Shensi card action callback endpoint:
 
 ```text
@@ -292,6 +306,9 @@ GET /hermes/pending/latest/card
 
 Then send the returned `card` object as `msg_type=interactive`. If card sending
 fails, fall back to the plain `reply_text`.
+
+If the response includes `feishu_message`, prefer sending that exact envelope:
+`msg_type=interactive`, `content=feishu_message.content`.
 
 If Shensi returns `auto_confirm_blocked=true`, do not retry auto-confirm. Show
 the parent a short summary and wait for explicit confirmation, discard, or

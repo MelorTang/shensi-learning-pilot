@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import base64
+import json
 
 from fastapi.testclient import TestClient
 
@@ -283,6 +284,8 @@ def test_hermes_parent_friendly_latest_pending_flow(tmp_path):
     card_payload = client.get("/hermes/pending/latest/card").json()
     assert card_payload["found"] is True
     assert card_payload["mistake_id"] == pending["mistake_id"]
+    assert card_payload["feishu_message"]["msg_type"] == "interactive"
+    assert json.loads(card_payload["feishu_message"]["content"]) == card_payload["card"]
     card_actions = card_payload["card"]["elements"][-1]["actions"]
     assert [item["text"]["content"] for item in card_actions] == ["确认入库", "丢弃", "重新分析", "修改后入库"]
     assert all(item["value"]["mistake_id"] == pending["mistake_id"] for item in card_actions)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -153,10 +154,15 @@ def hermes_latest_pending_card(request: Request) -> dict[str, Any]:
     pending = HermesService(sqlite).latest_pending()
     if not pending["found"]:
         return pending
+    card = build_pending_mistake_card(pending)
     return {
         "found": True,
         "mistake_id": pending["mistake_id"],
-        "card": build_pending_mistake_card(pending),
+        "card": card,
+        "feishu_message": {
+            "msg_type": "interactive",
+            "content": json.dumps(card, ensure_ascii=False),
+        },
         "reply_text": pending["reply_text"],
     }
 
