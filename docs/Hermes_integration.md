@@ -342,9 +342,10 @@ fails, fall back to the plain `reply_text`.
 If the response includes `feishu_message`, prefer sending that exact envelope:
 `msg_type=interactive`, `content=feishu_message.content`.
 
-After a card is sent successfully, do not also send the long pending
-`reply_text`; the card is the parent-facing summary. At most send one short
-status sentence such as "分析完成，请在卡片里确认入库或丢弃。"
+After a card is sent successfully, do not send any additional final answer.
+If the API response includes `suppress_followup_text=true` or
+`final_message=""`, the Feishu-visible final response must be empty. The card is
+the only parent-facing result.
 
 If Hermes cannot send interactive cards and pastes JSON as plain text, call
 `POST /hermes/pending/latest/card/send` with the current Feishu message id or
@@ -375,14 +376,32 @@ Parent-facing output style:
   permanently" unless debugging.
 - Do not send both the interactive card and a long Markdown report. The card is
   the report.
+- Do not echo recognized image contents back to the parent. Recognition details
+  belong in Shensi JSON/Markdown, not in Feishu chat.
+- Do not compare or restate your own preliminary analysis after Shensi returns a
+  card. Shensi/card output is the source of truth.
+- Tool execution and permission events are internal. Never forward approval UI
+  text, tool call text, or "Approved for session/permanently" messages to
+  Feishu.
 
 Visible Feishu messages should be limited to these shapes:
 
 - After receiving an image: "已收到图片，点击「慎思分析」开始处理。"
 - While analyzing: "正在分析这张错题，完成后我会发确认卡片。"
-- After sending the card: no extra text, or at most "分析完成，请在卡片里确认入库或丢弃。"
+- After sending the card: no extra text.
 - After confirm: "已确认入库。错题卡和 D+1/D+3/D+7 复习任务已更新。"
 - After discard: "已丢弃这条分析，不会写入错题卡或复习计划。"
 
 Never bypass the Shensi APIs for writes.
 ```
+
+Hermes runtime permissions:
+
+- Configure Hermes/tool runtime so Shensi wrapper calls are auto-approved in the
+  cloud session.
+- Do not route permission approval cards/messages into Feishu. Approval UI is
+  an operator concern, not a parent-facing chat message.
+- If the runtime cannot hide approval messages, run the Shensi wrapper in a
+  trusted service account/session where approvals are pre-granted, or move the
+  wrapper call behind a small server-side endpoint that Hermes can call without
+  interactive approval.

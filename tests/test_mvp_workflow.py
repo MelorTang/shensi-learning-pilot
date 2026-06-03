@@ -296,6 +296,9 @@ def test_hermes_parent_friendly_latest_pending_flow(tmp_path):
     assert card_payload["mistake_id"] == pending["mistake_id"]
     assert card_payload["feishu_message"]["msg_type"] == "interactive"
     assert json.loads(card_payload["feishu_message"]["content"]) == card_payload["card"]
+    assert card_payload["reply_text"] == ""
+    assert card_payload["final_message"] == ""
+    assert card_payload["suppress_followup_text"] is True
     card_actions = card_payload["card"]["elements"][-1]["actions"]
     assert [item["text"]["content"] for item in card_actions] == ["确认入库", "丢弃", "重新分析", "修改后入库"]
     assert all(item["value"]["mistake_id"] == pending["mistake_id"] for item in card_actions)
@@ -445,6 +448,9 @@ def test_hermes_pending_card_send_endpoint_replies_with_interactive_card(tmp_pat
     assert body["sent"] is True
     assert body["mistake_id"] == ingest["mistake_id"]
     assert body["delivery"]["mode"] == "reply"
+    assert body["reply_text"] == ""
+    assert body["final_message"] == ""
+    assert body["suppress_followup_text"] is True
     assert sent["message_id"] == "om_parent_message"
     assert sent["card"]["elements"][-1]["actions"][0]["value"]["mistake_id"] == ingest["mistake_id"]
 
@@ -504,6 +510,13 @@ def test_feishu_pending_mistake_card_contract():
     )
 
     assert card["header"]["title"]["content"] == "初二数学｜一次函数与方程组小测"
+    card_text = "\n".join(
+        element.get("text", {}).get("content", "")
+        for element in card["elements"]
+        if element.get("tag") == "div"
+    )
+    assert "k=-2" not in card_text
+    assert "k=2" not in card_text
     actions = card["elements"][-1]["actions"]
     assert [item["text"]["content"] for item in actions] == ["确认入库", "丢弃", "重新分析", "修改后入库"]
     assert [item["value"]["action"] for item in actions] == [

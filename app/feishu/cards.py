@@ -34,17 +34,6 @@ def build_pending_mistake_card(pending: dict[str, Any]) -> dict[str, Any]:
             },
         }
     ]
-    question_lines = _question_summary_lines(questions)
-    if question_lines:
-        elements.append(
-            {
-                "tag": "div",
-                "text": {
-                    "tag": "lark_md",
-                    "content": "\n".join(question_lines),
-                },
-            }
-        )
     if pending.get("root_cause"):
         elements.append(
             {
@@ -111,13 +100,3 @@ def _compact_text(text: Any, limit: int = 90) -> str:
     if len(value) <= limit:
         return value
     return f"{value[:limit].rstrip()}..."
-
-
-def _question_summary_lines(questions: list[dict[str, Any]]) -> list[str]:
-    lines = []
-    for item in questions[:5]:
-        verdict = "✅" if item.get("is_correct") is True else "❌" if item.get("is_correct") is False else "？"
-        student = item.get("student_answer") or "未识别"
-        correct = item.get("correct_answer") or "未识别"
-        lines.append(f"{verdict} 第{item.get('id')}题：{student} → {correct}")
-    return lines

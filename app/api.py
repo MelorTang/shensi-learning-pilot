@@ -165,7 +165,10 @@ def hermes_latest_pending_card(request: Request) -> dict[str, Any]:
             "msg_type": "interactive",
             "content": json.dumps(card, ensure_ascii=False),
         },
-        "reply_text": "慎思分析卡片已生成，请只发送 interactive card，不要再发送文字总结。",
+        "reply_text": "",
+        "final_message": "",
+        "suppress_followup_text": True,
+        "instruction": "只发送 interactive card；发送成功后不要再发送文字总结、识别内容或工具执行记录。",
     }
 
 
@@ -217,7 +220,10 @@ def hermes_send_latest_pending_card(
         "mistake_id": pending["mistake_id"],
         "delivery": delivery,
         "feishu_response": feishu_response,
-        "reply_text": "已发送慎思确认卡片。请在卡片里确认入库或丢弃。",
+        "reply_text": "",
+        "final_message": "",
+        "suppress_followup_text": True,
+        "instruction": "确认卡片已由慎思直接发送。不要再发送文字总结、识别内容或工具执行记录。",
     }
 
 
