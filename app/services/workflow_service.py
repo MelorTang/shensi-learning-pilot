@@ -542,7 +542,16 @@ class MistakeWorkflowService:
             analysis.get("question_items") or analysis.get("questions") or []
         )
         question_items, math_verification = self.math_verifier.verify_question_items(question_items)
-        confirmation_summary = self._build_confirmation_summary(question_items, math_verification)
+        expected_question_count = self._parse_positive_int(
+            analysis.get("expected_question_count")
+            or analysis.get("total_question_count")
+            or analysis.get("question_count")
+        )
+        confirmation_summary = self._build_confirmation_summary(
+            question_items,
+            math_verification,
+            expected_question_count=expected_question_count,
+        )
         title = analysis.get("title") or analysis.get("worksheet_title") or "External vision mistake analysis"
         question_text = analysis.get("question_text") or self._question_items_text(question_items)
         student_answer = analysis.get("student_answer") or analysis.get("student_answers") or ""
@@ -580,6 +589,8 @@ class MistakeWorkflowService:
             "note": note,
             "source": source,
             "question_items": question_items,
+            "expected_question_count": expected_question_count,
+            "extracted_question_count": len(question_items),
             "math_verification": math_verification,
             "confirmation_summary": confirmation_summary,
             "external_analysis": analysis,
@@ -589,6 +600,8 @@ class MistakeWorkflowService:
         self,
         question_items: list[dict[str, Any]],
         math_verification: dict[str, Any],
+        *,
+        expected_question_count: int | None = None,
     ) -> dict[str, Any]:
         wrong_items = [
             item.get("id") for item in question_items if item.get("is_correct") is False
@@ -596,36 +609,62 @@ class MistakeWorkflowService:
         review_items = [
             item.get("id") for item in question_items if item.get("needs_parent_review")
         ]
+        total_questions = len(question_items)
+        missing_count = max((expected_question_count or 0) - total_questions, 0)
+        missing_question_numbers = list(
+            range(total_questions + 1, total_questions + missing_count + 1)
+        )
+        extraction_complete = missing_count == 0
         return {
-            "total_questions": len(question_items),
+            "total_questions": total_questions,
+            "expected_question_count": expected_question_count,
+            "extracted_question_count": total_questions,
+            "missing_question_count": missing_count,
+            "missing_question_numbers": missing_question_numbers,
+            "extraction_complete": extraction_complete,
             "verified_questions": int(math_verification.get("verified_count") or 0),
             "wrong_questions": [item for item in wrong_items if item is not None],
             "needs_parent_review_questions": [item for item in review_items if item is not None],
             "needs_parent_review_count": int(
                 math_verification.get("needs_parent_review_count") or 0
+            )
+            + missing_count,
+            "message": self._confirmation_summary_message(
+                question_items,
+                math_verification,
+                expected_question_count=expected_question_count,
+                missing_count=missing_count,
             ),
-            "message": self._confirmation_summary_message(question_items, math_verification),
         }
 
     def _confirmation_summary_message(
         self,
         question_items: list[dict[str, Any]],
         math_verification: dict[str, Any],
+        *,
+        expected_question_count: int | None = None,
+        missing_count: int = 0,
     ) -> str:
         total = len(question_items)
         verified = int(math_verification.get("verified_count") or 0)
         review_count = int(math_verification.get("needs_parent_review_count") or 0)
         wrong_count = len([item for item in question_items if item.get("is_correct") is False])
+        expected_text = f", expected {expected_question_count}" if expected_question_count else ""
+        missing_text = f", {missing_count} missing from extraction" if missing_count else ""
         return (
-            f"{total} question(s), {verified} verified by Shensi, "
-            f"{wrong_count} marked wrong, {review_count} need parent review."
+            f"{total} question(s){expected_text}, {verified} verified by Shensi, "
+            f"{wrong_count} marked wrong, {review_count + missing_count} need parent review"
+            f"{missing_text}."
         )
 
     def _can_auto_confirm_external_analysis(self, analysis: dict[str, Any] | None) -> bool:
         if not analysis:
             return False
         summary = analysis.get("confirmation_summary") or {}
-        return int(summary.get("needs_parent_review_count") or 0) == 0
+        return (
+            bool(summary.get("extraction_complete", True))
+            and int(summary.get("needs_parent_review_count") or 0) == 0
+        )
 
     def _auto_confirm_blocked_payload(self, analysis: dict[str, Any] | None) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -731,6 +770,15 @@ class MistakeWorkflowService:
         if text in {"false", "wrong", "incorrect", "no", "fail", "错", "错误"}:
             return False
         return None
+
+    def _parse_positive_int(self, value: Any) -> int | None:
+        if value is None or isinstance(value, bool):
+            return None
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return None
+        return parsed if parsed > 0 else None
 
     def _stringify_answer(self, value: Any) -> str:
         if isinstance(value, str):

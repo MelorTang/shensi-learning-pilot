@@ -32,6 +32,13 @@ Antigravity/Gemini to extract the visible homework content into structured JSON,
 then submit that JSON to Shensi. Shensi will run deterministic verification for
 supported algebra items after ingest.
 
+For menu-driven analysis, Hermes must use the most recent image from the same
+Feishu chat/user that triggered the menu action. Do not reuse a stale global
+`~/.hermes/image_cache` entry. The Shensi `message_id` should be unique for that
+image, for example the Feishu image message id or a stable id built from chat id,
+sender id, image filename, and image mtime. Reusing an old message id correctly
+returns the old Shensi result because Shensi writes are idempotent.
+
 ## Feishu UX Plan
 
 Use bot menus for starting Shensi workflows, and use interactive cards for
@@ -251,9 +258,20 @@ student_answer, correct_answer when visible or inferable, is_correct if you have
 a preliminary judgment, and error_reason if you see a likely mistake. Shensi will
 run deterministic verification after ingest for supported math types.
 
+Before extracting details, count the visible numbered questions. Include
+`expected_question_count` in the analysis JSON. Return every visible question in
+`question_items`; if a question is partly unreadable, still include a placeholder
+item with the visible text, empty unknown fields, and a low confidence note
+instead of silently omitting it.
+
 Then call POST http://127.0.0.1:8000/ingest/mistake-analysis with a stable
 message_id, platform="feishu", sender_id, chat_id, subject, grade, note, the
 image_path or image_base64, and the analysis JSON.
+
+When the parent clicks the bot menu item, use the latest image in this same chat
+as the `image_path`. If there is no recent image in the chat, ask the parent to
+send a picture first. Never analyze an older cached image just because it is the
+newest file on disk.
 
 Only call the Shensi workflow when the parent clearly asks to process learning
 material. Good trigger phrases include "提交这张错题", "分析刚才的图片",

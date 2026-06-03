@@ -122,6 +122,11 @@ directly. The wrapper should send per-question fields in
 student steps, verdict, correct answer, and error reason instead of a flat
 summary.
 
+For Feishu bot-menu analysis, Hermes must pass the latest image from the same
+chat/user into the wrapper. Do not select a stale global image cache file. Use a
+fresh Shensi `message_id` per image; repeated ids intentionally deduplicate and
+return the old result.
+
 Recommended Feishu UX:
 
 - Bot menu: `慎思分析`, `今日日报`, `复习任务`, `帮助`
@@ -160,7 +165,8 @@ Recommended Hermes prompt shape:
 
 ```text
 Step 1: read the image and extract structured JSON only.
-Step 2: send that JSON to POST /ingest/mistake-analysis.
+Step 2: include expected_question_count and every visible question in question_items.
+Step 3: send that JSON to POST /ingest/mistake-analysis.
 Do not write SQLite or Obsidian directly. Do not use /ingest/mistake-image if
 you already have structured analysis.
 ```

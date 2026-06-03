@@ -63,6 +63,10 @@ class HermesService:
             "root_cause": analysis.get("root_cause") or "",
             "parent_guidance": analysis.get("parent_guidance") or "",
             "confirmation_summary": analysis.get("confirmation_summary") or {},
+            "extraction": {
+                "expected_question_count": analysis.get("expected_question_count"),
+                "extracted_question_count": analysis.get("extracted_question_count"),
+            },
             "questions": questions,
             "actions": {
                 "confirm_latest": "/hermes/pending/latest/confirm",
@@ -94,6 +98,15 @@ class HermesService:
             f"共 {summary.get('total_questions', len(payload.get('questions') or []))} 题，"
             f"慎思已验算 {summary.get('verified_questions', 0)} 题。",
         ]
+        if summary.get("extraction_complete") is False:
+            expected = summary.get("expected_question_count") or "未知"
+            extracted = summary.get("extracted_question_count") or len(payload.get("questions") or [])
+            missing = summary.get("missing_question_numbers") or []
+            missing_text = f"第{', '.join(str(item) for item in missing)}题" if missing else "部分题目"
+            lines.append(
+                f"注意：图片里预计有 {expected} 题，但这次只抽取到 {extracted} 题，"
+                f"可能漏了{missing_text}。建议重新分析或重新发一张更清晰的图。"
+            )
         if wrong_ids:
             lines.append(f"错题：第{', '.join(str(item) for item in wrong_ids)}题。")
         else:

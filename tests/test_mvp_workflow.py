@@ -297,6 +297,81 @@ def test_hermes_parent_friendly_latest_pending_flow(tmp_path):
     assert client.get("/debug/counts").json()["reviews"] == 3
 
 
+def test_external_analysis_flags_incomplete_question_extraction(tmp_path):
+    image_path = tmp_path / "four-question-homework.jpg"
+    image_path.write_bytes(b"fake four question homework image")
+    settings = Settings(
+        db_path=tmp_path / "shensi.db",
+        vault_path=tmp_path / "vault" / "Shensi-Learning-Vault",
+    )
+    client = TestClient(create_app(settings))
+
+    response = client.post(
+        "/ingest/mistake-analysis",
+        json={
+            "message_id": "incomplete-extraction-001",
+            "platform": "feishu",
+            "sender_id": "parent-user",
+            "chat_id": "chat-001",
+            "image_path": str(image_path),
+            "subject": "math",
+            "grade": "grade8",
+            "note": "vision saw four questions but returned three",
+            "auto_confirm": True,
+            "analysis": {
+                "provider": "antigravity",
+                "model": "gemini-via-antigravity",
+                "title": "Four question worksheet",
+                "expected_question_count": 4,
+                "concepts": ["linear function", "linear system", "slope"],
+                "error_types": ["calculation_error"],
+                "root_cause": "One visible question was not extracted.",
+                "severity": 3,
+                "confidence": 0.88,
+                "question_items": [
+                    {
+                        "id": 1,
+                        "question": "Evaluate y=-2x+7 when x=-3",
+                        "student_answer": "y=13",
+                        "is_correct": True,
+                    },
+                    {
+                        "id": 2,
+                        "question": "Solve x+y=11, 2x-y=4",
+                        "student_answer": "x=5,y=6",
+                        "is_correct": True,
+                    },
+                    {
+                        "id": 3,
+                        "question": "Find slope A(-2,5), B(4,-1)",
+                        "student_answer": "k=1",
+                        "is_correct": False,
+                    },
+                ],
+                "parent_guidance": "Ask for a clearer photo before confirming.",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "waiting_confirmation"
+    assert body["auto_confirm_blocked"] is True
+    summary = body["confirmation_summary"]
+    assert summary["expected_question_count"] == 4
+    assert summary["extracted_question_count"] == 3
+    assert summary["missing_question_count"] == 1
+    assert summary["missing_question_numbers"] == [4]
+    assert summary["extraction_complete"] is False
+    assert summary["needs_parent_review_count"] >= 1
+    assert "missing from extraction" in summary["message"]
+
+    pending = client.get("/hermes/pending/latest").json()
+    assert pending["found"] is True
+    assert pending["confirmation_summary"]["extraction_complete"] is False
+    assert "只抽取到 3 题" in pending["reply_text"]
+
+
 def test_feishu_pending_mistake_card_contract():
     card = build_pending_mistake_card(
         {
