@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CHAT_ID="${1:-}"
+SENDER_ID="${2:-hermes-feishu}"
+SUBJECT="${3:-math}"
+GRADE="${4:-grade9}"
+LOG="/home/admin/.hermes/logs/shensi-feishu-analysis-latest.log"
+mkdir -p "$(dirname "$LOG")"
+
+if [[ -z "$CHAT_ID" ]]; then
+  echo "没有找到飞书会话，请稍后重试。"
+  exit 0
+fi
+
+IMG="$(find /home/admin/.hermes/image_cache -type f \( -name '*.jpg' -o -name '*.jpeg' -o -name '*.png' \) -printf '%T@ %p
+' | sort -nr | head -1 | cut -d' ' -f2-)"
+if [[ -z "$IMG" || ! -f "$IMG" ]]; then
+  echo "请先发送一张错题图片。"
+  exit 0
+fi
+
+SAFE_CHAT="$(printf '%s' "$CHAT_ID" | tr -c 'A-Za-z0-9_' '_')"
+MESSAGE_ID="feishu-${SAFE_CHAT}-$(date +%s)"
+
+echo "$(date -Is) start chat=$CHAT_ID sender=$SENDER_ID image=$IMG message_id=$MESSAGE_ID subject=$SUBJECT grade=$GRADE" >> "$LOG"
+
+(
+  set -euo pipefail
+  export SHENSI_CHAT_ID="$CHAT_ID"
+  export SHENSI_SENDER_ID="$SENDER_ID"
+  /home/admin/bin/shensi-antigravity-submit "$IMG" "$MESSAGE_ID" "$SUBJECT" "$GRADE" "Feishu Shensi analysis" >> "$LOG" 2>&1
+  python3 - "$CHAT_ID" <<'PY_CARD' >> "$LOG" 2>&1
+import json
+import sys
+import urllib.request
+chat_id = sys.argv[1]
+payload = json.dumps({"receive_id": chat_id, "receive_id_type": "chat_id"}).encode("utf-8")
+req = urllib.request.Request(
+    "http://127.0.0.1:8000/hermes/pending/latest/card/send",
+    data=payload,
+    headers={"Content-Type": "application/json"},
+    method="POST",
+)
+with urllib.request.urlopen(req, timeout=30) as resp:
+    print(resp.read().decode("utf-8"))
+PY_CARD
+  echo "$(date -Is) done message_id=$MESSAGE_ID" >> "$LOG"
+) >/dev/null 2>&1 &
+
+echo "正在分析这张错题，完成后我会发确认卡片。"

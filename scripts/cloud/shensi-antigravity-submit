@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+IMAGE_PATH="${1:-}"
+MESSAGE_ID="${2:-ag-$(date +%s)}"
+SUBJECT="${3:-math}"
+GRADE="${4:-grade8}"
+NOTE="${5:-Antigravity vision analysis}"
+
+VISION="/home/admin/bin/shensi-antigravity-vision"
+SHENSI_URL="${SHENSI_URL:-http://127.0.0.1:8000/ingest/mistake-analysis}"
+
+LOG="/home/admin/.hermes/logs/shensi-antigravity-submit.log"
+mkdir -p "$(dirname "$LOG")"
+echo "$(date -Is) image=$IMAGE_PATH message_id=$MESSAGE_ID subject=$SUBJECT grade=$GRADE" >> "$LOG"
+
+if [[ -z "$IMAGE_PATH" ]]; then
+  echo '{"ok":false,"error":"missing image_path"}'
+  exit 2
+fi
+
+TMP_JSON="$(mktemp /tmp/shensi-ag-analysis.XXXXXX.json)"
+TMP_PAYLOAD="$(mktemp /tmp/shensi-ag-payload.XXXXXX.json)"
+
+"$VISION" "$IMAGE_PATH" "$SUBJECT" "$GRADE" > "$TMP_JSON"
+
+python3 -m json.tool "$TMP_JSON" >/dev/null
+
+python3 - "$TMP_JSON" "$TMP_PAYLOAD" "$MESSAGE_ID" "$IMAGE_PATH" "$SUBJECT" "$GRADE" "$NOTE" <<'PY'
+import json
+import os
+import sys
+
+analysis_path, payload_path, message_id, image_path, subject, grade, note = sys.argv[1:]
+
+with open(analysis_path, "r", encoding="utf-8") as f:
+    analysis = json.load(f)
+
+payload = {
+    "message_id": message_id,
+    "platform": "feishu",
+    "sender_id": os.environ.get("SHENSI_SENDER_ID", "hermes-antigravity"),
+    "chat_id": os.environ.get("SHENSI_CHAT_ID", "hermes-antigravity"),
+    "image_path": image_path,
+    "subject": subject,
+    "grade": grade,
+    "note": note,
+    "auto_confirm": False,
+    "analysis": analysis,
+}
+
+with open(payload_path, "w", encoding="utf-8") as f:
+    json.dump(payload, f, ensure_ascii=False)
+PY
+
+curl -sS -X POST "$SHENSI_URL" \
+  -H "Content-Type: application/json" \
+  --data-binary @"$TMP_PAYLOAD"

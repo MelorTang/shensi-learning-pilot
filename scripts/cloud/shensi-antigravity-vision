@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+AGY="${AGY_BIN:-/home/admin/.local/bin/agy}"
+IMAGE_PATH="${1:-}"
+SUBJECT="${2:-math}"
+GRADE="${3:-grade8}"
+
+if [[ -z "$IMAGE_PATH" ]]; then
+  echo '{"ok":false,"error":"missing image_path"}'
+  exit 2
+fi
+
+if [[ ! -f "$IMAGE_PATH" ]]; then
+  echo "{\"ok\":false,\"error\":\"image_not_found\",\"image_path\":\"$IMAGE_PATH\"}"
+  exit 3
+fi
+
+PROMPT=$(cat <<PROMPT_EOF
+你是慎思学习诊断系统的多模态识图模块。
+
+请必须打开并读取下面给出的图片文件本身，再输出 JSON。不要只根据文件名、路径、上下文或历史记忆猜测内容。
+如果你无法读取图片文件，必须输出 {"ok":false,"error":"cannot_read_image"}，不要编造题目。
+只输出 JSON，不要输出 Markdown，不要解释。
+
+要求：
+1. 识别题目、学生步骤、学生答案。
+2. 可以做初步批改，但不要过度自信。
+3. 输出必须是一个 JSON object。
+4. 字段结构如下：
+
+{
+  "provider": "antigravity",
+  "model": "gemini-via-antigravity",
+  "subject": "$SUBJECT",
+  "grade": "$GRADE",
+  "title": "...",
+  "question_items": [
+    {
+      "id": 1,
+      "question": "...",
+      "type": "...",
+      "student_steps": ["..."],
+      "student_answer": "...",
+      "correct_answer": "...",
+      "is_correct": true,
+      "error_reason": "...",
+      "concept": "...",
+      "error_type": "..."
+    }
+  ],
+  "student_answer": "...",
+  "correct_answer": "...",
+  "concepts": ["..."],
+  "error_types": ["..."],
+  "root_cause": "...",
+  "severity": 3,
+  "confidence": 0.8,
+  "parent_guidance": "..."
+}
+
+图片路径：
+$IMAGE_PATH
+PROMPT_EOF
+)
+
+"$AGY" --sandbox --dangerously-skip-permissions --add-dir "$(dirname "$IMAGE_PATH")" --print "$PROMPT" --print-timeout 120s
