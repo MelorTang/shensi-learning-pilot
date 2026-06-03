@@ -100,6 +100,25 @@ class FeishuClient:
             authenticated=True,
         )
 
+    def send_interactive_card(
+        self,
+        *,
+        receive_id: str,
+        receive_id_type: str,
+        card: dict[str, Any],
+    ) -> dict[str, Any]:
+        query = urlencode({"receive_id_type": receive_id_type})
+        return self._json_request(
+            "POST",
+            f"/open-apis/im/v1/messages?{query}",
+            body={
+                "receive_id": receive_id,
+                "msg_type": "interactive",
+                "content": json.dumps(card, ensure_ascii=False),
+            },
+            authenticated=True,
+        )
+
     def _json_request(
         self,
         method: str,

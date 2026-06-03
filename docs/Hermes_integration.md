@@ -89,6 +89,26 @@ The response also includes a Feishu-ready envelope:
 When Hermes has a Feishu send/reply tool, pass `feishu_message.msg_type` and
 `feishu_message.content` to that tool. Do not paste the card JSON as plain text.
 
+If Hermes' `send_message` tool converts the interactive payload into visible
+JSON text, bypass that tool and ask Shensi to send the card through the Feishu
+OpenAPI:
+
+```text
+POST /hermes/pending/latest/card/send
+```
+
+Reply mode:
+
+```json
+{"reply_to_message_id":"<feishu message id>"}
+```
+
+Chat send mode:
+
+```json
+{"receive_id":"<chat id>","receive_id_type":"chat_id"}
+```
+
 Shensi card action callback endpoint:
 
 ```text
@@ -309,6 +329,10 @@ fails, fall back to the plain `reply_text`.
 
 If the response includes `feishu_message`, prefer sending that exact envelope:
 `msg_type=interactive`, `content=feishu_message.content`.
+
+If Hermes cannot send interactive cards and pastes JSON as plain text, call
+`POST /hermes/pending/latest/card/send` with the current Feishu message id or
+chat id so Shensi sends the card directly.
 
 If Shensi returns `auto_confirm_blocked=true`, do not retry auto-confirm. Show
 the parent a short summary and wait for explicit confirmation, discard, or

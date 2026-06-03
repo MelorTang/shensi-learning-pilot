@@ -57,3 +57,9 @@ class ConfirmationRequest(BaseModel):
 class ReportDraftRequest(BaseModel):
     report_type: Literal["daily", "weekly"]
     date: str | None = None
+
+
+class FeishuCardSendRequest(BaseModel):
+    reply_to_message_id: str | None = None
+    receive_id: str | None = None
+    receive_id_type: Literal["open_id", "user_id", "union_id", "email", "chat_id"] = "chat_id"

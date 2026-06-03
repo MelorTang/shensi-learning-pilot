@@ -8,12 +8,14 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from app.config import Settings
 from app.models.schemas import (
     ConfirmationRequest,
+    FeishuCardSendRequest,
     HermesAnalysisIngestRequest,
     HermesMistakeIngestRequest,
     LocalUploadRequest,
     ReportDraftRequest,
 )
 from app.feishu.cards import build_pending_mistake_card
+from app.feishu.client import FeishuClient, FeishuClientError
 from app.services.hermes_service import HermesService
 from app.services.sqlite_service import SQLiteService
 from app.services.workflow_service import MistakeWorkflowService
@@ -164,6 +166,58 @@ def hermes_latest_pending_card(request: Request) -> dict[str, Any]:
             "content": json.dumps(card, ensure_ascii=False),
         },
         "reply_text": pending["reply_text"],
+    }
+
+
+@router.post("/hermes/pending/latest/card/send")
+def hermes_send_latest_pending_card(
+    body: FeishuCardSendRequest,
+    request: Request,
+) -> dict[str, Any]:
+    settings = _settings(request)
+    sqlite = SQLiteService(settings.db_path)
+    pending = HermesService(sqlite).latest_pending()
+    if not pending["found"]:
+        return pending
+
+    if not body.reply_to_message_id and not body.receive_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide reply_to_message_id or receive_id to send a Feishu interactive card.",
+        )
+
+    client = FeishuClient(settings)
+    card = build_pending_mistake_card(pending)
+    try:
+        if body.reply_to_message_id:
+            feishu_response = client.reply_interactive_card(
+                message_id=body.reply_to_message_id,
+                card=card,
+            )
+            delivery = {
+                "mode": "reply",
+                "reply_to_message_id": body.reply_to_message_id,
+            }
+        else:
+            feishu_response = client.send_interactive_card(
+                receive_id=body.receive_id or "",
+                receive_id_type=body.receive_id_type,
+                card=card,
+            )
+            delivery = {
+                "mode": "send",
+                "receive_id": body.receive_id,
+                "receive_id_type": body.receive_id_type,
+            }
+    except FeishuClientError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {
+        "sent": True,
+        "mistake_id": pending["mistake_id"],
+        "delivery": delivery,
+        "feishu_response": feishu_response,
+        "reply_text": "已发送慎思确认卡片。",
     }
 
 

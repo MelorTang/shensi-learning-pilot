@@ -185,6 +185,7 @@ you already have structured analysis.
 - `GET /reviews/today`
 - `GET /hermes/pending/latest`
 - `GET /hermes/pending/latest/card`
+- `POST /hermes/pending/latest/card/send`
 - `POST /hermes/pending/latest/confirm`
 - `POST /hermes/pending/latest/discard`
 - `POST /reports/daily/regenerate`
@@ -198,6 +199,17 @@ you already have structured analysis.
 Feishu-ready `feishu_message` envelope with `msg_type="interactive"` and
 `content` as the card JSON string. Hermes should send that envelope through the
 Feishu send/reply tool instead of pasting JSON into chat.
+
+If Hermes' own Feishu send tool turns interactive cards into plain text, call
+Shensi's direct sender instead:
+
+```text
+POST /hermes/pending/latest/card/send
+```
+
+Use either `{"reply_to_message_id":"<feishu message id>"}` to reply with a card,
+or `{"receive_id":"<chat id>","receive_id_type":"chat_id"}` to send the card to
+a chat.
 
 ## Generated Files
 

@@ -375,6 +375,109 @@ def test_external_analysis_flags_incomplete_question_extraction(tmp_path):
     assert "只抽取到 3 题" in pending["reply_text"]
 
 
+def test_hermes_pending_card_send_endpoint_requires_destination(tmp_path):
+    settings = Settings(
+        db_path=tmp_path / "shensi.db",
+        vault_path=tmp_path / "vault" / "Shensi-Learning-Vault",
+    )
+    client = TestClient(create_app(settings))
+    client.post(
+        "/local/simulate-upload",
+        json={
+            "message_id": "card-send-missing-destination",
+            "subject": "math",
+            "grade": "grade8",
+            "note": "card send destination validation",
+            "auto_confirm": False,
+        },
+    )
+
+    response = client.post("/hermes/pending/latest/card/send", json={})
+
+    assert response.status_code == 400
+    assert "reply_to_message_id or receive_id" in response.json()["detail"]
+
+
+def test_hermes_pending_card_send_endpoint_replies_with_interactive_card(tmp_path, monkeypatch):
+    settings = Settings(
+        db_path=tmp_path / "shensi.db",
+        vault_path=tmp_path / "vault" / "Shensi-Learning-Vault",
+        feishu_app_id="cli_test_app",
+        feishu_app_secret="cli_test_secret",
+    )
+    client = TestClient(create_app(settings))
+    ingest = client.post(
+        "/local/simulate-upload",
+        json={
+            "message_id": "card-send-reply",
+            "subject": "math",
+            "grade": "grade8",
+            "note": "card send reply",
+            "auto_confirm": False,
+        },
+    ).json()
+    sent: dict[str, object] = {}
+
+    def fake_reply_interactive_card(self, *, message_id, card):
+        sent["message_id"] = message_id
+        sent["card"] = card
+        return {"code": 0, "data": {"message_id": "om_card_reply"}}
+
+    monkeypatch.setattr("app.api.FeishuClient.reply_interactive_card", fake_reply_interactive_card)
+
+    response = client.post(
+        "/hermes/pending/latest/card/send",
+        json={"reply_to_message_id": "om_parent_message"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["sent"] is True
+    assert body["mistake_id"] == ingest["mistake_id"]
+    assert body["delivery"]["mode"] == "reply"
+    assert sent["message_id"] == "om_parent_message"
+    assert sent["card"]["elements"][-1]["actions"][0]["value"]["mistake_id"] == ingest["mistake_id"]
+
+
+def test_hermes_pending_card_send_endpoint_sends_to_chat(tmp_path, monkeypatch):
+    settings = Settings(
+        db_path=tmp_path / "shensi.db",
+        vault_path=tmp_path / "vault" / "Shensi-Learning-Vault",
+        feishu_app_id="cli_test_app",
+        feishu_app_secret="cli_test_secret",
+    )
+    client = TestClient(create_app(settings))
+    client.post(
+        "/local/simulate-upload",
+        json={
+            "message_id": "card-send-chat",
+            "subject": "math",
+            "grade": "grade8",
+            "note": "card send chat",
+            "auto_confirm": False,
+        },
+    )
+    sent: dict[str, object] = {}
+
+    def fake_send_interactive_card(self, *, receive_id, receive_id_type, card):
+        sent["receive_id"] = receive_id
+        sent["receive_id_type"] = receive_id_type
+        sent["card"] = card
+        return {"code": 0, "data": {"message_id": "om_card_send"}}
+
+    monkeypatch.setattr("app.api.FeishuClient.send_interactive_card", fake_send_interactive_card)
+
+    response = client.post(
+        "/hermes/pending/latest/card/send",
+        json={"receive_id": "oc_chat_001", "receive_id_type": "chat_id"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["delivery"]["mode"] == "send"
+    assert sent["receive_id"] == "oc_chat_001"
+    assert sent["receive_id_type"] == "chat_id"
+
+
 def test_feishu_pending_mistake_card_contract():
     card = build_pending_mistake_card(
         {
