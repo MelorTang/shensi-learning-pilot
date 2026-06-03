@@ -106,6 +106,8 @@ Invoke-RestMethod `
 ```
 
 See [docs/Hermes_integration.md](docs/Hermes_integration.md) for the Hermes instruction draft.
+For a reusable Hermes skill file that can be installed on the cloud host, see
+[deploy/hermes-skills/README.md](deploy/hermes-skills/README.md).
 
 For real Feishu homework images, the recommended cloud path is:
 
