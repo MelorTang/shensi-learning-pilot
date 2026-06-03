@@ -7,26 +7,78 @@ SUBJECT="${3:-math}"
 GRADE="${4:-grade8}"
 NOTE="${5:-Antigravity vision analysis}"
 
-VISION="/home/admin/bin/shensi-antigravity-vision"
+VISION="${SHENSI_ANTIGRAVITY_VISION:-/home/admin/bin/shensi-antigravity-vision}"
 SHENSI_URL="${SHENSI_URL:-http://127.0.0.1:8000/ingest/mistake-analysis}"
+LOG_DIR="${SHENSI_LOG_DIR:-/home/admin/.hermes/logs}"
+LOG="$LOG_DIR/shensi-antigravity-submit.log"
+mkdir -p "$LOG_DIR"
 
-LOG="/home/admin/.hermes/logs/shensi-antigravity-submit.log"
-mkdir -p "$(dirname "$LOG")"
-echo "$(date -Is) image=$IMAGE_PATH message_id=$MESSAGE_ID subject=$SUBJECT grade=$GRADE" >> "$LOG"
+log() {
+  echo "$(date -Is) $*" >> "$LOG"
+}
+
+json_error() {
+  python3 - "$@" <<'PY'
+import json
+import sys
+
+stage, code, message, message_id, image_path = sys.argv[1:6]
+print(json.dumps({
+    "ok": False,
+    "stage": stage,
+    "error": code,
+    "message": message,
+    "message_id": message_id,
+    "image_path": image_path,
+}, ensure_ascii=False))
+PY
+}
+
+log "start image=$IMAGE_PATH message_id=$MESSAGE_ID subject=$SUBJECT grade=$GRADE"
 
 if [[ -z "$IMAGE_PATH" ]]; then
-  echo '{"ok":false,"error":"missing image_path"}'
+  json_error "input" "missing_image_path" "image_path argument is required" "$MESSAGE_ID" ""
   exit 2
 fi
 
-TMP_JSON="$(mktemp /tmp/shensi-ag-analysis.XXXXXX.json)"
-TMP_PAYLOAD="$(mktemp /tmp/shensi-ag-payload.XXXXXX.json)"
+if [[ ! -f "$IMAGE_PATH" ]]; then
+  json_error "input" "image_not_found" "image file does not exist" "$MESSAGE_ID" "$IMAGE_PATH"
+  exit 3
+fi
 
-"$VISION" "$IMAGE_PATH" "$SUBJECT" "$GRADE" > "$TMP_JSON"
+if [[ ! -x "$VISION" ]]; then
+  json_error "vision" "vision_not_found" "vision wrapper is not executable" "$MESSAGE_ID" "$IMAGE_PATH"
+  exit 4
+fi
 
-python3 -m json.tool "$TMP_JSON" >/dev/null
+SAFE_ID="$(printf '%s' "$MESSAGE_ID" | tr -c 'A-Za-z0-9_.-' '_')"
+VISION_OUT="$LOG_DIR/${SAFE_ID}.vision.out"
+VISION_ERR="$LOG_DIR/${SAFE_ID}.vision.err"
+PAYLOAD_JSON="$LOG_DIR/${SAFE_ID}.payload.json"
+RESPONSE_JSON="$LOG_DIR/${SAFE_ID}.shensi-response.json"
 
-python3 - "$TMP_JSON" "$TMP_PAYLOAD" "$MESSAGE_ID" "$IMAGE_PATH" "$SUBJECT" "$GRADE" "$NOTE" <<'PY'
+set +e
+"$VISION" "$IMAGE_PATH" "$SUBJECT" "$GRADE" >"$VISION_OUT" 2>"$VISION_ERR"
+vision_status=$?
+set -e
+
+if [[ "$vision_status" -ne 0 ]]; then
+  stderr_preview="$(head -40 "$VISION_ERR" | tr '\n' ' ' | cut -c1-800)"
+  stdout_preview="$(head -40 "$VISION_OUT" | tr '\n' ' ' | cut -c1-800)"
+  log "vision_failed status=$vision_status stdout=$stdout_preview stderr=$stderr_preview"
+  json_error "vision" "vision_failed" "vision exited with status $vision_status" "$MESSAGE_ID" "$IMAGE_PATH"
+  exit "$vision_status"
+fi
+
+if ! python3 -m json.tool "$VISION_OUT" >/dev/null 2>>"$LOG"; then
+  stdout_preview="$(head -80 "$VISION_OUT" | tr '\n' ' ' | cut -c1-1200)"
+  stderr_preview="$(head -80 "$VISION_ERR" | tr '\n' ' ' | cut -c1-1200)"
+  log "vision_invalid_json stdout=$stdout_preview stderr=$stderr_preview"
+  json_error "vision" "invalid_json" "vision stdout was not valid JSON; see $VISION_OUT and $VISION_ERR" "$MESSAGE_ID" "$IMAGE_PATH"
+  exit 10
+fi
+
+python3 - "$VISION_OUT" "$PAYLOAD_JSON" "$MESSAGE_ID" "$IMAGE_PATH" "$SUBJECT" "$GRADE" "$NOTE" <<'PY'
 import json
 import os
 import sys
@@ -35,6 +87,14 @@ analysis_path, payload_path, message_id, image_path, subject, grade, note = sys.
 
 with open(analysis_path, "r", encoding="utf-8") as f:
     analysis = json.load(f)
+
+if analysis.get("ok") is False:
+    raise SystemExit(f"vision returned error: {analysis}")
+
+analysis.setdefault("provider", "antigravity")
+analysis.setdefault("model", "gemini-via-antigravity")
+analysis.setdefault("subject", subject)
+analysis.setdefault("grade", grade)
 
 payload = {
     "message_id": message_id,
@@ -53,6 +113,26 @@ with open(payload_path, "w", encoding="utf-8") as f:
     json.dump(payload, f, ensure_ascii=False)
 PY
 
+set +e
 curl -sS -X POST "$SHENSI_URL" \
   -H "Content-Type: application/json" \
-  --data-binary @"$TMP_PAYLOAD"
+  --data-binary @"$PAYLOAD_JSON" \
+  >"$RESPONSE_JSON" 2>>"$LOG"
+curl_status=$?
+set -e
+
+if [[ "$curl_status" -ne 0 ]]; then
+  log "shensi_post_failed status=$curl_status response_file=$RESPONSE_JSON"
+  json_error "submit" "shensi_post_failed" "curl exited with status $curl_status" "$MESSAGE_ID" "$IMAGE_PATH"
+  exit "$curl_status"
+fi
+
+if ! python3 -m json.tool "$RESPONSE_JSON" >/dev/null 2>>"$LOG"; then
+  response_preview="$(head -80 "$RESPONSE_JSON" | tr '\n' ' ' | cut -c1-1200)"
+  log "shensi_invalid_json response=$response_preview"
+  json_error "submit" "shensi_invalid_json" "Shensi response was not valid JSON; see $RESPONSE_JSON" "$MESSAGE_ID" "$IMAGE_PATH"
+  exit 11
+fi
+
+log "done message_id=$MESSAGE_ID response_file=$RESPONSE_JSON"
+cat "$RESPONSE_JSON"

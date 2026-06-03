@@ -5,36 +5,74 @@ AGY="${AGY_BIN:-/home/admin/.local/bin/agy}"
 IMAGE_PATH="${1:-}"
 SUBJECT="${2:-math}"
 GRADE="${3:-grade8}"
+TIMEOUT_SECONDS="${AGY_TIMEOUT_SECONDS:-150}"
+
+json_error() {
+  python3 - "$@" <<'PY'
+import json
+import sys
+
+code, message, image_path = sys.argv[1:4]
+payload = {
+    "ok": False,
+    "error": code,
+    "message": message,
+}
+if image_path:
+    payload["image_path"] = image_path
+print(json.dumps(payload, ensure_ascii=False))
+PY
+}
 
 if [[ -z "$IMAGE_PATH" ]]; then
-  echo '{"ok":false,"error":"missing image_path"}'
+  json_error "missing_image_path" "image_path argument is required" ""
   exit 2
 fi
 
 if [[ ! -f "$IMAGE_PATH" ]]; then
-  echo "{\"ok\":false,\"error\":\"image_not_found\",\"image_path\":\"$IMAGE_PATH\"}"
+  json_error "image_not_found" "image file does not exist" "$IMAGE_PATH"
   exit 3
 fi
 
+if [[ ! -x "$AGY" ]]; then
+  json_error "agy_not_found" "Antigravity CLI is not executable" "$IMAGE_PATH"
+  exit 4
+fi
+
+OUT="$(mktemp /tmp/shensi-agy-vision.XXXXXX.out)"
+ERR="$(mktemp /tmp/shensi-agy-vision.XXXXXX.err)"
+trap 'rm -f "$OUT" "$ERR"' EXIT
+
 PROMPT=$(cat <<PROMPT_EOF
-你是慎思学习诊断系统的多模态识图模块。
+You are the vision extraction module for Shensi Learning Pilot.
 
-请必须打开并读取下面给出的图片文件本身，再输出 JSON。不要只根据文件名、路径、上下文或历史记忆猜测内容。
-如果你无法读取图片文件，必须输出 {"ok":false,"error":"cannot_read_image"}，不要编造题目。
-只输出 JSON，不要输出 Markdown，不要解释。
+You MUST inspect the actual image file below. Do not infer from filename,
+conversation history, or memory. If the image cannot be read, return exactly:
+{"ok":false,"error":"cannot_read_image"}
 
-要求：
-1. 识别题目、学生步骤、学生答案。
-2. 可以做初步批改，但不要过度自信。
-3. 输出必须是一个 JSON object。
-4. 字段结构如下：
+Return one JSON object only. Do not return Markdown fences, explanation,
+terminal logs, or natural-language commentary.
 
+Image path:
+$IMAGE_PATH
+
+Task:
+1. Count every visible numbered question first.
+2. Set expected_question_count to that visible count.
+3. Extract every visible question into question_items. If one question is partly
+   unreadable, still include a placeholder item with visible text and empty
+   unknown fields. Never silently omit a visible question.
+4. Extract student steps and student answers.
+5. You may provide a preliminary correctness judgment, but Shensi will verify.
+
+Required JSON shape:
 {
   "provider": "antigravity",
   "model": "gemini-via-antigravity",
   "subject": "$SUBJECT",
   "grade": "$GRADE",
   "title": "...",
+  "expected_question_count": 0,
   "question_items": [
     {
       "id": 1,
@@ -44,9 +82,9 @@ PROMPT=$(cat <<PROMPT_EOF
       "student_answer": "...",
       "correct_answer": "...",
       "is_correct": true,
-      "error_reason": "...",
+      "error_reason": "",
       "concept": "...",
-      "error_type": "..."
+      "error_type": ""
     }
   ],
   "student_answer": "...",
@@ -58,10 +96,82 @@ PROMPT=$(cat <<PROMPT_EOF
   "confidence": 0.8,
   "parent_guidance": "..."
 }
-
-图片路径：
-$IMAGE_PATH
 PROMPT_EOF
 )
 
-"$AGY" --sandbox --dangerously-skip-permissions --add-dir "$(dirname "$IMAGE_PATH")" --print "$PROMPT" --print-timeout 120s
+set +e
+timeout "${TIMEOUT_SECONDS}s" "$AGY" \
+  --sandbox \
+  --dangerously-skip-permissions \
+  --add-dir "$(dirname "$IMAGE_PATH")" \
+  --print "$PROMPT" \
+  --print-timeout "${TIMEOUT_SECONDS}s" \
+  >"$OUT" 2>"$ERR"
+status=$?
+set -e
+
+if [[ "$status" -ne 0 ]]; then
+  message="$(head -20 "$ERR" | tr '\n' ' ' | cut -c1-500)"
+  json_error "agy_failed" "agy exited with status $status: $message" "$IMAGE_PATH"
+  exit "$status"
+fi
+
+python3 - "$OUT" "$IMAGE_PATH" <<'PY'
+import json
+import sys
+
+out_path, image_path = sys.argv[1:3]
+text = open(out_path, "r", encoding="utf-8", errors="replace").read().strip()
+
+def fail(code: str, message: str) -> None:
+    print(json.dumps({
+        "ok": False,
+        "error": code,
+        "message": message,
+        "image_path": image_path,
+    }, ensure_ascii=False))
+    raise SystemExit(10)
+
+if not text:
+    fail("empty_output", "Antigravity returned empty stdout")
+
+def extract_json_object(raw: str) -> str:
+    start = raw.find("{")
+    if start < 0:
+        fail("json_not_found", raw[:500])
+    depth = 0
+    in_string = False
+    escape = False
+    for index in range(start, len(raw)):
+        char = raw[index]
+        if in_string:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return raw[start:index + 1]
+    fail("json_incomplete", raw[:500])
+
+candidate = extract_json_object(text)
+try:
+    data = json.loads(candidate)
+except json.JSONDecodeError as exc:
+    fail("invalid_json", f"{exc}: {candidate[:500]}")
+
+if not isinstance(data, dict):
+    fail("json_not_object", "Top-level JSON value is not an object")
+
+data.setdefault("provider", "antigravity")
+data.setdefault("model", "gemini-via-antigravity")
+print(json.dumps(data, ensure_ascii=False))
+PY

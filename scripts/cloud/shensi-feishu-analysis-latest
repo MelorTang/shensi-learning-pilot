@@ -5,39 +5,77 @@ CHAT_ID="${1:-}"
 SENDER_ID="${2:-hermes-feishu}"
 SUBJECT="${3:-math}"
 GRADE="${4:-grade9}"
-LOG="/home/admin/.hermes/logs/shensi-feishu-analysis-latest.log"
-mkdir -p "$(dirname "$LOG")"
+
+IMAGE_CACHE="${HERMES_IMAGE_CACHE:-/home/admin/.hermes/image_cache}"
+SUBMIT="${SHENSI_ANTIGRAVITY_SUBMIT:-/home/admin/bin/shensi-antigravity-submit}"
+CARD_URL="${SHENSI_CARD_SEND_URL:-http://127.0.0.1:8000/hermes/pending/latest/card/send}"
+LOG_DIR="${SHENSI_LOG_DIR:-/home/admin/.hermes/logs}"
+LOG="$LOG_DIR/shensi-feishu-analysis-latest.log"
+mkdir -p "$LOG_DIR"
+
+log() {
+  echo "$(date -Is) $*" >> "$LOG"
+}
 
 if [[ -z "$CHAT_ID" ]]; then
   echo "没有找到飞书会话，请稍后重试。"
   exit 0
 fi
 
-IMG="$(find /home/admin/.hermes/image_cache -type f \( -name '*.jpg' -o -name '*.jpeg' -o -name '*.png' \) -printf '%T@ %p
-' | sort -nr | head -1 | cut -d' ' -f2-)"
-if [[ -z "$IMG" || ! -f "$IMG" ]]; then
+if [[ ! -d "$IMAGE_CACHE" ]]; then
   echo "请先发送一张错题图片。"
+  log "image_cache_missing path=$IMAGE_CACHE chat=$CHAT_ID sender=$SENDER_ID"
   exit 0
 fi
 
-SAFE_CHAT="$(printf '%s' "$CHAT_ID" | tr -c 'A-Za-z0-9_' '_')"
+IMG="$(
+  find "$IMAGE_CACHE" -type f \
+    \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) \
+    -printf '%T@ %p\n' \
+  | sort -nr \
+  | head -1 \
+  | cut -d' ' -f2-
+)"
+
+if [[ -z "$IMG" || ! -f "$IMG" ]]; then
+  echo "请先发送一张错题图片。"
+  log "image_not_found cache=$IMAGE_CACHE chat=$CHAT_ID sender=$SENDER_ID"
+  exit 0
+fi
+
+if [[ ! -x "$SUBMIT" ]]; then
+  echo "慎思分析脚本未就绪，请稍后重试。"
+  log "submit_not_executable path=$SUBMIT"
+  exit 1
+fi
+
+SAFE_CHAT="$(printf '%s' "$CHAT_ID" | tr -c 'A-Za-z0-9_.-' '_')"
 MESSAGE_ID="feishu-${SAFE_CHAT}-$(date +%s)"
 
-echo "$(date -Is) start chat=$CHAT_ID sender=$SENDER_ID image=$IMG message_id=$MESSAGE_ID subject=$SUBJECT grade=$GRADE" >> "$LOG"
+log "start chat=$CHAT_ID sender=$SENDER_ID image=$IMG message_id=$MESSAGE_ID subject=$SUBJECT grade=$GRADE"
 
 (
   set -euo pipefail
   export SHENSI_CHAT_ID="$CHAT_ID"
   export SHENSI_SENDER_ID="$SENDER_ID"
-  /home/admin/bin/shensi-antigravity-submit "$IMG" "$MESSAGE_ID" "$SUBJECT" "$GRADE" "Feishu Shensi analysis" >> "$LOG" 2>&1
-  python3 - "$CHAT_ID" <<'PY_CARD' >> "$LOG" 2>&1
+
+  if ! "$SUBMIT" "$IMG" "$MESSAGE_ID" "$SUBJECT" "$GRADE" "Feishu Shensi analysis" >> "$LOG" 2>&1; then
+    log "submit_failed message_id=$MESSAGE_ID image=$IMG"
+    exit 1
+  fi
+
+  python3 - "$CHAT_ID" "$CARD_URL" <<'PY_CARD' >> "$LOG" 2>&1
 import json
 import sys
 import urllib.request
-chat_id = sys.argv[1]
-payload = json.dumps({"receive_id": chat_id, "receive_id_type": "chat_id"}).encode("utf-8")
+
+chat_id, card_url = sys.argv[1:3]
+payload = json.dumps({
+    "receive_id": chat_id,
+    "receive_id_type": "chat_id",
+}).encode("utf-8")
 req = urllib.request.Request(
-    "http://127.0.0.1:8000/hermes/pending/latest/card/send",
+    card_url,
     data=payload,
     headers={"Content-Type": "application/json"},
     method="POST",
@@ -45,7 +83,8 @@ req = urllib.request.Request(
 with urllib.request.urlopen(req, timeout=30) as resp:
     print(resp.read().decode("utf-8"))
 PY_CARD
-  echo "$(date -Is) done message_id=$MESSAGE_ID" >> "$LOG"
+
+  log "done message_id=$MESSAGE_ID"
 ) >/dev/null 2>&1 &
 
 echo "正在分析这张错题，完成后我会发确认卡片。"
