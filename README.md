@@ -124,6 +124,16 @@ directly. The wrapper should send per-question fields in
 student steps, verdict, correct answer, and error reason instead of a flat
 summary.
 
+`/home/admin/bin/shensi-feishu-analysis-latest` also accepts an optional fifth
+argument for an explicit image path:
+
+```bash
+/home/admin/bin/shensi-feishu-analysis-latest <chat_id> <sender_id> <subject> <grade> <image_path>
+```
+
+If this path is provided, the script uses it directly. Otherwise it falls back
+to the newest image file in `~/.hermes/image_cache`.
+
 For Feishu bot-menu analysis, Hermes must pass the latest image from the same
 chat/user into the wrapper. Do not select a stale global image cache file. Use a
 fresh Shensi `message_id` per image; repeated ids intentionally deduplicate and

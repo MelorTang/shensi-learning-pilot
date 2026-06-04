@@ -39,6 +39,16 @@ image, for example the Feishu image message id or a stable id built from chat id
 sender id, image filename, and image mtime. Reusing an old message id correctly
 returns the old Shensi result because Shensi writes are idempotent.
 
+The helper wrapper accepts an explicit image path as argument 5:
+
+```bash
+/home/admin/bin/shensi-feishu-analysis-latest <chat_id> <sender_id> <subject> <grade> <image_path>
+```
+
+Prefer this explicit-path mode whenever Hermes can recover the exact cached
+image file for the current chat/session. The global cache fallback should remain
+only as a compatibility fallback.
+
 ## Feishu UX Plan
 
 Use bot menus for starting Shensi workflows, and use interactive cards for
