@@ -739,6 +739,46 @@ class MistakeWorkflowService:
                     ),
                     "concept": item.get("concept") or item.get("knowledge_point") or "",
                     "error_type": item.get("error_type") or item.get("error_types") or "",
+                    "sub_items": self._normalize_sub_items(
+                        item.get("sub_items") or item.get("parts") or item.get("sub_questions") or []
+                    ),
+                }
+            )
+        return normalized
+
+    def _normalize_sub_items(self, items: Any) -> list[dict[str, Any]]:
+        if not isinstance(items, list):
+            return []
+
+        normalized: list[dict[str, Any]] = []
+        for index, item in enumerate(items, start=1):
+            if not isinstance(item, dict):
+                normalized.append(
+                    {
+                        "label": f"({index})",
+                        "is_correct": None,
+                        "error_reason": str(item),
+                        "concept": "",
+                    }
+                )
+                continue
+
+            is_correct = item.get("is_correct")
+            if is_correct is None:
+                is_correct = item.get("correct")
+            if is_correct is None:
+                is_correct = self._parse_verdict(item.get("verdict") or item.get("result"))
+            normalized.append(
+                {
+                    "label": str(item.get("label") or item.get("id") or item.get("number") or f"({index})"),
+                    "is_correct": is_correct,
+                    "error_reason": (
+                        item.get("error_reason")
+                        or item.get("reason")
+                        or item.get("mistake_reason")
+                        or ""
+                    ),
+                    "concept": item.get("concept") or item.get("knowledge_point") or "",
                 }
             )
         return normalized

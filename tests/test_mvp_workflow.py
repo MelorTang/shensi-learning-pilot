@@ -301,7 +301,7 @@ def test_hermes_parent_friendly_latest_pending_flow(tmp_path):
     assert card_payload["reply_text"] == ""
     assert card_payload["final_message"] == ""
     assert card_payload["suppress_followup_text"] is True
-    assert "规则验算：3/3" in card_payload["card"]["elements"][0]["text"]["content"]
+    assert "规则验算 3/3" in card_payload["card"]["elements"][0]["text"]["content"]
     card_actions = card_payload["card"]["elements"][-1]["actions"]
     assert [item["text"]["content"] for item in card_actions] == ["确认入库", "丢弃", "重新分析", "修改后入库"]
     assert all(item["value"]["mistake_id"] == pending["mistake_id"] for item in card_actions)
@@ -502,7 +502,7 @@ def test_feishu_pending_mistake_card_contract():
         {
             "mistake_id": "mistake-001",
             "title": "初二数学｜一次函数与方程组小测",
-            "concepts": ["一次函数"],
+            "concepts": ["linear_function"],
             "root_cause": "第3题斜率公式分子顺序反了。",
             "parent_guidance": "复习斜率公式。",
             "confirmation_summary": {
@@ -540,6 +540,20 @@ def test_feishu_pending_mistake_card_contract():
                     "is_correct": False,
                     "verification_status": "unsupported",
                     "needs_parent_review": True,
+                    "sub_items": [
+                        {
+                            "label": "(1)",
+                            "is_correct": True,
+                            "error_reason": "代入正确",
+                            "concept": "linear_function",
+                        },
+                        {
+                            "label": "(2)",
+                            "is_correct": False,
+                            "error_reason": "斜率公式分子顺序反了",
+                            "concept": "linear_function",
+                        },
+                    ],
                 },
             ],
         }
@@ -553,12 +567,13 @@ def test_feishu_pending_mistake_card_contract():
     )
     assert "k=-2" not in card_text
     assert "k=2" not in card_text
-    assert "规则验算：2/3" in card_text
+    assert "规则验算 2/3" in card_text
     assert "仅模型判断：第3题" in card_text
-    assert "需确认：第3题" in card_text
+    assert "建议家长复核：第3题" in card_text
     assert "逐题判断" in card_text
-    assert "初判错，待确认 **第3题**" in card_text
-    assert "判断依据：斜率公式分子顺序反了" in card_text
+    assert "初判错 **第3题**" in card_text
+    assert "(1)对：代入正确" in card_text
+    assert "(2)错：斜率公式分子顺序反了" in card_text
     assert "**涉及知识点**：一次函数" in card_text
     actions = card["elements"][-1]["actions"]
     assert [item["text"]["content"] for item in actions] == ["确认入库", "丢弃", "重新分析", "修改后入库"]
@@ -896,7 +911,7 @@ def test_external_analysis_math_verifier_overrides_bad_llm_verdict(tmp_path):
     assert "只做视觉模型判断" in pending["reply_text"]
     pending_card = client.get("/hermes/pending/latest/card").json()["card"]
     card_summary = pending_card["elements"][0]["text"]["content"]
-    assert "规则验算：6/7" in card_summary
+    assert "规则验算 6/7" in card_summary
     assert "仅模型判断：第7题" in card_summary
 
     confirmation = client.post(

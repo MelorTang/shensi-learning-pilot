@@ -75,6 +75,10 @@ Task:
 8. Be conservative: do not mark all questions wrong just because the page has
    teacher marks. Prefer needs_parent_review-style uncertainty in the wording
    when evidence is incomplete.
+9. For multi-part questions, fill sub_items with concise per-part judgments.
+   Keep each sub-item error_reason under 35 Chinese characters when possible.
+10. If a teacher mark appears inconsistent with the math, state the math evidence
+    and set is_correct based on the evidence, not on the teacher mark alone.
 
 Required JSON shape:
 {
@@ -95,7 +99,15 @@ Required JSON shape:
       "is_correct": null,
       "error_reason": "",
       "concept": "...",
-      "error_type": ""
+      "error_type": "",
+      "sub_items": [
+        {
+          "label": "(1)",
+          "is_correct": null,
+          "error_reason": "...",
+          "concept": "..."
+        }
+      ]
     }
   ],
   "student_answer": "...",

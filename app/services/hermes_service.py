@@ -60,6 +60,7 @@ class HermesService:
                     "verification_method": verification.get("method"),
                     "verification_conflict_with_llm": conflict_with_llm,
                     "needs_parent_review": bool(item.get("needs_parent_review")),
+                    "sub_items": item.get("sub_items") or [],
                 }
             )
 
