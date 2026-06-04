@@ -49,6 +49,35 @@ Prefer this explicit-path mode whenever Hermes can recover the exact cached
 image file for the current chat/session. The global cache fallback should remain
 only as a compatibility fallback.
 
+Hermes should also index images as soon as they are received:
+
+```bash
+/home/admin/bin/shensi-index-image <chat_id> <sender_id> <image_path>
+```
+
+This writes:
+
+```text
+~/.hermes/shensi_image_index/<safe_chat_id>/<safe_sender_id>.path
+```
+
+When argument 5 is omitted, `shensi-feishu-analysis-latest` reads this index
+before falling back to the global newest file in `~/.hermes/image_cache`.
+
+Timing logs:
+
+- image indexing: `~/.hermes/logs/shensi-image-index.log`
+- analysis phases: `~/.hermes/logs/shensi-feishu-analysis-latest.log`
+
+Important timing fields:
+
+- `phase=resolve_image`
+- `phase=submit_start`
+- `phase=submit_done elapsed_ms=...`
+- `phase=card_send_start`
+- `phase=card_send_done elapsed_ms=...`
+- `phase=done total_elapsed_ms=...`
+
 ## Feishu UX Plan
 
 Use bot menus for starting Shensi workflows, and use interactive cards for

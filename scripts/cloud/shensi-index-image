@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CHAT_ID="${1:-}"
+SENDER_ID="${2:-hermes-feishu}"
+IMAGE_PATH="${3:-}"
+
+IMAGE_INDEX_DIR="${SHENSI_IMAGE_INDEX_DIR:-/home/admin/.hermes/shensi_image_index}"
+LOG_DIR="${SHENSI_LOG_DIR:-/home/admin/.hermes/logs}"
+LOG="$LOG_DIR/shensi-image-index.log"
+mkdir -p "$LOG_DIR"
+
+log() {
+  echo "$(date -Is) $*" >> "$LOG"
+}
+
+safe_key() {
+  printf '%s' "$1" | tr -c 'A-Za-z0-9_.-' '_'
+}
+
+if [[ -z "$CHAT_ID" || -z "$IMAGE_PATH" ]]; then
+  echo "usage: shensi-index-image <chat_id> <sender_id> <image_path>" >&2
+  exit 2
+fi
+
+if [[ ! -f "$IMAGE_PATH" ]]; then
+  log "image_not_found chat=$CHAT_ID sender=$SENDER_ID image=$IMAGE_PATH"
+  echo "image not found: $IMAGE_PATH" >&2
+  exit 3
+fi
+
+SAFE_CHAT="$(safe_key "$CHAT_ID")"
+SAFE_SENDER="$(safe_key "$SENDER_ID")"
+TARGET_DIR="$IMAGE_INDEX_DIR/$SAFE_CHAT"
+TARGET_FILE="$TARGET_DIR/$SAFE_SENDER.path"
+mkdir -p "$TARGET_DIR"
+
+printf '%s\n' "$IMAGE_PATH" > "$TARGET_FILE"
+log "indexed chat=$CHAT_ID sender=$SENDER_ID image=$IMAGE_PATH file=$TARGET_FILE"
+
+echo "$TARGET_FILE"

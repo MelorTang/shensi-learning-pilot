@@ -8,14 +8,23 @@ GRADE="${4:-grade9}"
 EXPLICIT_IMAGE_PATH="${5:-${SHENSI_IMAGE_PATH:-}}"
 
 IMAGE_CACHE="${HERMES_IMAGE_CACHE:-/home/admin/.hermes/image_cache}"
+IMAGE_INDEX_DIR="${SHENSI_IMAGE_INDEX_DIR:-/home/admin/.hermes/shensi_image_index}"
 SUBMIT="${SHENSI_ANTIGRAVITY_SUBMIT:-/home/admin/bin/shensi-antigravity-submit}"
 CARD_URL="${SHENSI_CARD_SEND_URL:-http://127.0.0.1:8000/hermes/pending/latest/card/send}"
 LOG_DIR="${SHENSI_LOG_DIR:-/home/admin/.hermes/logs}"
 LOG="$LOG_DIR/shensi-feishu-analysis-latest.log"
 mkdir -p "$LOG_DIR"
 
+now_ms() {
+  date +%s%3N
+}
+
 log() {
   echo "$(date -Is) $*" >> "$LOG"
+}
+
+safe_key() {
+  printf '%s' "$1" | tr -c 'A-Za-z0-9_.-' '_'
 }
 
 choose_latest_cached_image() {
@@ -31,11 +40,22 @@ choose_latest_cached_image() {
   | cut -d' ' -f2-
 }
 
+indexed_image_path() {
+  local safe_chat safe_sender index_file
+  safe_chat="$(safe_key "$CHAT_ID")"
+  safe_sender="$(safe_key "$SENDER_ID")"
+  index_file="$IMAGE_INDEX_DIR/$safe_chat/$safe_sender.path"
+  if [[ -f "$index_file" ]]; then
+    head -n 1 "$index_file"
+  fi
+}
+
 if [[ -z "$CHAT_ID" ]]; then
-  echo "没有找到飞书会话，请稍后重试。"
+  echo "No Feishu chat was found. Please try again later."
   exit 0
 fi
 
+SCRIPT_START_MS="$(now_ms)"
 IMAGE_SOURCE="cache_latest"
 IMG=""
 
@@ -44,47 +64,62 @@ if [[ -n "$EXPLICIT_IMAGE_PATH" ]]; then
     IMG="$EXPLICIT_IMAGE_PATH"
     IMAGE_SOURCE="explicit_path"
   else
-    echo "找不到指定图片，请重新发送图片后再试。"
+    echo "The selected image was not found. Please send the image again."
     log "explicit_image_not_found path=$EXPLICIT_IMAGE_PATH chat=$CHAT_ID sender=$SENDER_ID"
     exit 0
   fi
 else
-  if [[ ! -d "$IMAGE_CACHE" ]]; then
-    echo "请先发送一张错题图片。"
-    log "image_cache_missing path=$IMAGE_CACHE chat=$CHAT_ID sender=$SENDER_ID"
-    exit 0
+  INDEXED_PATH="$(indexed_image_path || true)"
+  if [[ -n "$INDEXED_PATH" && -f "$INDEXED_PATH" ]]; then
+    IMG="$INDEXED_PATH"
+    IMAGE_SOURCE="chat_sender_index"
+  elif [[ -n "$INDEXED_PATH" ]]; then
+    log "indexed_image_not_found path=$INDEXED_PATH chat=$CHAT_ID sender=$SENDER_ID"
   fi
 
-  IMG="$(choose_latest_cached_image)"
+  if [[ -z "$IMG" ]]; then
+    if [[ ! -d "$IMAGE_CACHE" ]]; then
+      echo "Please send a homework image first."
+      log "image_cache_missing path=$IMAGE_CACHE chat=$CHAT_ID sender=$SENDER_ID"
+      exit 0
+    fi
+    IMG="$(choose_latest_cached_image)"
+  fi
 fi
 
 if [[ -z "$IMG" || ! -f "$IMG" ]]; then
-  echo "请先发送一张错题图片。"
+  echo "Please send a homework image first."
   log "image_not_found cache=$IMAGE_CACHE chat=$CHAT_ID sender=$SENDER_ID"
   exit 0
 fi
 
 if [[ ! -x "$SUBMIT" ]]; then
-  echo "慎思分析脚本未就绪，请稍后重试。"
+  echo "Shensi analysis script is not ready. Please try again later."
   log "submit_not_executable path=$SUBMIT"
   exit 1
 fi
 
-SAFE_CHAT="$(printf '%s' "$CHAT_ID" | tr -c 'A-Za-z0-9_.-' '_')"
+SAFE_CHAT="$(safe_key "$CHAT_ID")"
 MESSAGE_ID="feishu-${SAFE_CHAT}-$(date +%s)"
 
-log "start chat=$CHAT_ID sender=$SENDER_ID image=$IMG image_source=$IMAGE_SOURCE message_id=$MESSAGE_ID subject=$SUBJECT grade=$GRADE"
+log "phase=resolve_image chat=$CHAT_ID sender=$SENDER_ID image=$IMG image_source=$IMAGE_SOURCE message_id=$MESSAGE_ID elapsed_ms=$(( $(now_ms) - SCRIPT_START_MS )) subject=$SUBJECT grade=$GRADE"
 
 (
   set -euo pipefail
   export SHENSI_CHAT_ID="$CHAT_ID"
   export SHENSI_SENDER_ID="$SENDER_ID"
 
+  BG_START_MS="$(now_ms)"
+  SUBMIT_START_MS="$(now_ms)"
+  log "phase=submit_start message_id=$MESSAGE_ID image=$IMG"
   if ! "$SUBMIT" "$IMG" "$MESSAGE_ID" "$SUBJECT" "$GRADE" "Feishu Shensi analysis" >> "$LOG" 2>&1; then
-    log "submit_failed message_id=$MESSAGE_ID image=$IMG"
+    log "phase=submit_failed message_id=$MESSAGE_ID image=$IMG elapsed_ms=$(( $(now_ms) - SUBMIT_START_MS ))"
     exit 1
   fi
+  log "phase=submit_done message_id=$MESSAGE_ID elapsed_ms=$(( $(now_ms) - SUBMIT_START_MS ))"
 
+  CARD_START_MS="$(now_ms)"
+  log "phase=card_send_start message_id=$MESSAGE_ID chat=$CHAT_ID"
   python3 - "$CHAT_ID" "$CARD_URL" <<'PY_CARD' >> "$LOG" 2>&1
 import json
 import sys
@@ -124,7 +159,8 @@ except urllib.error.HTTPError as exc:
     raise
 PY_CARD
 
-  log "done message_id=$MESSAGE_ID"
+  log "phase=card_send_done message_id=$MESSAGE_ID elapsed_ms=$(( $(now_ms) - CARD_START_MS ))"
+  log "phase=done message_id=$MESSAGE_ID total_elapsed_ms=$(( $(now_ms) - BG_START_MS ))"
 ) >/dev/null 2>&1 &
 
 echo "正在分析这张错题，完成后我会发确认卡片。"

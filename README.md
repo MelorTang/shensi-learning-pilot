@@ -131,8 +131,19 @@ argument for an explicit image path:
 /home/admin/bin/shensi-feishu-analysis-latest <chat_id> <sender_id> <subject> <grade> <image_path>
 ```
 
-If this path is provided, the script uses it directly. Otherwise it falls back
-to the newest image file in `~/.hermes/image_cache`.
+If this path is provided, the script uses it directly. Otherwise it reads the
+chat/sender image index first, then falls back to the newest image file in
+`~/.hermes/image_cache`.
+
+Hermes should index each received image as soon as it knows the local cached
+file path:
+
+```bash
+/home/admin/bin/shensi-index-image <chat_id> <sender_id> <image_path>
+```
+
+This keeps `慎思分析` tied to the current Feishu chat and sender, while adding
+only a tiny local file write.
 
 For Feishu bot-menu analysis, Hermes must pass the latest image from the same
 chat/user into the wrapper. Do not select a stale global image cache file. Use a
@@ -468,6 +479,11 @@ cd ~/apps/shensi-learning-pilot
 git pull
 source .venv/bin/activate
 python -m pytest
+chmod +x scripts/cloud/shensi-*
+ln -sf /home/admin/apps/shensi-learning-pilot/scripts/cloud/shensi-index-image /home/admin/bin/shensi-index-image
+ln -sf /home/admin/apps/shensi-learning-pilot/scripts/cloud/shensi-feishu-analysis-latest /home/admin/bin/shensi-feishu-analysis-latest
+ln -sf /home/admin/apps/shensi-learning-pilot/scripts/cloud/shensi-antigravity-submit /home/admin/bin/shensi-antigravity-submit
+ln -sf /home/admin/apps/shensi-learning-pilot/scripts/cloud/shensi-antigravity-vision /home/admin/bin/shensi-antigravity-vision
 sudo systemctl restart shensi
 systemctl --user restart shensi-feishu-card
 curl http://127.0.0.1:8000/health

@@ -26,26 +26,43 @@ sent homework or mistake image. Typical trigger phrases:
 For normal chat, encouragement, or general study questions, answer normally and
 do not call Shensi or Antigravity wrappers.
 
-## Main flow
+## Image Indexing
 
-1. Find the latest image from the same Feishu chat and same sender. Never use an
-   older global cache image just because it is the newest file on disk.
-2. While starting the workflow, send only a short status line:
+When a Feishu image is received and Hermes knows the local cached file path,
+index it immediately:
+
+```bash
+/home/admin/bin/shensi-index-image <chat_id> <sender_id> <image_path>
+```
+
+This is a lightweight local file write. It should happen before any long model
+reasoning. The index lets later menu actions use the latest image from the same
+chat and sender instead of a global newest cache file.
+
+## Main Flow
+
+1. On image receipt, index the local cached image path with
+   `shensi-index-image`.
+2. When the parent triggers analysis, send only:
    `正在分析这张错题，完成后我会发确认卡片。`
-3. Call the trusted cloud wrapper:
+3. Call the trusted cloud wrapper. Prefer an explicit image path when Hermes has
+   it:
 
    ```bash
-   /home/admin/bin/shensi-feishu-analysis-latest <chat_id> <sender_id> <subject> <grade>
+   /home/admin/bin/shensi-feishu-analysis-latest <chat_id> <sender_id> <subject> <grade> <image_path>
    ```
 
-4. Let the wrapper call:
+4. If Hermes does not know the exact image path, omit argument 5. The wrapper
+   will read the chat/sender image index first, then fall back to the global
+   image cache.
+5. Let the wrapper call:
    - `/home/admin/bin/shensi-antigravity-submit`
    - `/home/admin/bin/shensi-antigravity-vision`
    - `POST http://127.0.0.1:8000/ingest/mistake-analysis`
    - `POST http://127.0.0.1:8000/hermes/pending/latest/card/send`
-5. After the card is successfully sent, do not send any extra summary text.
+6. After the card is successfully sent, do not send any extra summary text.
 
-## Card actions
+## Card Actions
 
 If the parent clicks a Feishu card button, route by `value.action`:
 
@@ -61,7 +78,7 @@ Preferred behavior:
   - `POST /hermes/pending/latest/confirm`
   - `POST /hermes/pending/latest/discard`
 
-## Output policy
+## Output Policy
 
 Parent-facing messages must stay short and natural Chinese.
 
@@ -99,11 +116,28 @@ Never expose these unless the operator explicitly asks for debugging:
 - If no recent image exists in the same chat, ask the parent to send a picture
   first instead of analyzing a stale cached image.
 
-## Operator notes
+## Operator Notes
 
-- This skill assumes the cloud server already has:
-  - `/home/admin/bin/shensi-feishu-analysis-latest`
-  - `/home/admin/bin/shensi-antigravity-submit`
-  - `/home/admin/bin/shensi-antigravity-vision`
-- This skill is meant to reduce Hermes prompt drift. It does not replace the
-  Shensi API contracts.
+This skill assumes the cloud server already has:
+
+- `/home/admin/bin/shensi-index-image`
+- `/home/admin/bin/shensi-feishu-analysis-latest`
+- `/home/admin/bin/shensi-antigravity-submit`
+- `/home/admin/bin/shensi-antigravity-vision`
+
+Timing logs are written to:
+
+- `/home/admin/.hermes/logs/shensi-image-index.log`
+- `/home/admin/.hermes/logs/shensi-feishu-analysis-latest.log`
+
+Important timing fields:
+
+- `phase=resolve_image`
+- `phase=submit_start`
+- `phase=submit_done elapsed_ms=...`
+- `phase=card_send_start`
+- `phase=card_send_done elapsed_ms=...`
+- `phase=done total_elapsed_ms=...`
+
+This skill is meant to reduce Hermes prompt drift. It does not replace the
+Shensi API contracts.
