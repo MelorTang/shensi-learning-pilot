@@ -417,6 +417,17 @@ refreshes the summary, and returns an updated interactive card. If there are
 multiple pending items and the parent is ambiguous, ask which one they mean
 before modifying, confirming, or discarding.
 
+On cloud, prefer the wrapper so Hermes does not accidentally route the edit back
+through image analysis:
+
+```bash
+/home/admin/bin/shensi-pending-modify <chat_id> <parent correction text>
+```
+
+For parent corrections to an existing pending card, never call
+`shensi-feishu-analysis-latest`, Antigravity, Gemini vision, or any image
+analysis wrapper unless the parent explicitly asks to reprocess the photo.
+
 Parent-facing output style:
 
 - Keep it short: title, which questions are wrong, one root cause, one parent

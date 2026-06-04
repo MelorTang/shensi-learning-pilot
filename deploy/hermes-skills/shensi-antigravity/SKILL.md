@@ -12,8 +12,9 @@ deduplication, parent confirmation, review scheduling, and report generation.
 
 ## Trigger
 
-Use this skill only when the parent clearly asks Shensi to process a recently
-sent homework or mistake image. Typical trigger phrases:
+Use this skill when the parent clearly asks Shensi to process a recently sent
+homework image, asks to confirm/discard a pending Shensi result, or replies with
+corrections to a pending Shensi result. Typical trigger phrases:
 
 - `慎思分析`
 - `提交这张错题`
@@ -25,6 +26,13 @@ sent homework or mistake image. Typical trigger phrases:
 
 For normal chat, encouragement, or general study questions, answer normally and
 do not call Shensi or Antigravity wrappers.
+
+Correction examples that should use this skill:
+
+- `Question 3 is actually correct`
+- `Change question 2 student answer to ...`
+- `Change question 4 reason to ...`
+- `The analysis needs a correction`
 
 ## Image Indexing
 
@@ -84,6 +92,17 @@ analysis unless the parent explicitly asks to reprocess the photo.
 Preferred behavior:
 
 - Let Shensi receive the card callback directly.
+- Highest priority for parent corrections: if a pending card exists and the
+  parent says a question is correct/wrong or asks to change an answer, reason,
+  concept, or title, do not ask them to click analysis again and do not call
+  `shensi-feishu-analysis-latest`. Call:
+
+  ```bash
+  /home/admin/bin/shensi-pending-modify <chat_id> <parent correction text>
+  ```
+
+  The wrapper updates the pending analysis and sends a refreshed card through
+  Shensi. After it succeeds, do not send extra explanation text.
 - If the parent replies naturally with a correction before confirming, call
   `POST http://127.0.0.1:8000/hermes/pending/latest/modify` with the parent text,
   for example `{"text":"第3题其实是对的，学生答案改成 k=2"}`. If you already parsed the

@@ -250,6 +250,16 @@ structured `question_updates` when it has already parsed the parent reply.
 Shensi keeps the item in `waiting_confirmation`, refreshes the pending summary,
 and returns a new Feishu card envelope for the parent to confirm.
 
+On the cloud host, Hermes should use the wrapper instead of asking the parent to
+click analysis again:
+
+```bash
+/home/admin/bin/shensi-pending-modify <chat_id> <parent correction text>
+```
+
+The wrapper calls `/hermes/pending/latest/modify` and then sends a refreshed
+Feishu card through Shensi. It does not run Antigravity or reprocess the image.
+
 ## Generated Files
 
 Defaults:
@@ -506,6 +516,7 @@ source .venv/bin/activate
 python -m pytest
 chmod +x scripts/cloud/shensi-*
 ln -sf /home/admin/apps/shensi-learning-pilot/scripts/cloud/shensi-index-image /home/admin/bin/shensi-index-image
+ln -sf /home/admin/apps/shensi-learning-pilot/scripts/cloud/shensi-pending-modify /home/admin/bin/shensi-pending-modify
 ln -sf /home/admin/apps/shensi-learning-pilot/scripts/cloud/shensi-feishu-analysis-latest /home/admin/bin/shensi-feishu-analysis-latest
 ln -sf /home/admin/apps/shensi-learning-pilot/scripts/cloud/shensi-antigravity-submit /home/admin/bin/shensi-antigravity-submit
 ln -sf /home/admin/apps/shensi-learning-pilot/scripts/cloud/shensi-antigravity-vision /home/admin/bin/shensi-antigravity-vision
