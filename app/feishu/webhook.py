@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -49,6 +50,7 @@ async def receive_webhook(request: Request) -> dict[str, Any]:
 
 @router.post("/card-callback")
 async def receive_card_callback(request: Request) -> dict[str, Any]:
+    start = time.perf_counter()
     payload = await request.json()
     challenge = payload.get("challenge")
     if challenge:
@@ -59,34 +61,113 @@ async def receive_card_callback(request: Request) -> dict[str, Any]:
     mistake_id = action_value.get("mistake_id")
     if not action or not mistake_id:
         raise HTTPException(status_code=400, detail="missing card action or mistake_id")
+    _log_card_callback(
+        "start",
+        action=action,
+        mistake_id=str(mistake_id),
+        elapsed_ms=_elapsed_ms(start),
+    )
 
     settings: Settings = request.app.state.settings
     workflow = MistakeWorkflowService(settings)
     try:
         if action == "shensi_confirm":
+            existing = workflow.sqlite.get_mistake(str(mistake_id))
+            if existing and existing.get("status") == "confirmed":
+                message = "这条错题已确认入库，无需重复操作。"
+                delivery = _try_reply_to_card_action(settings, payload, message)
+                _log_card_callback(
+                    "already_confirmed",
+                    action=action,
+                    mistake_id=str(mistake_id),
+                    delivery_mode=(delivery or {}).get("mode"),
+                    elapsed_ms=_elapsed_ms(start),
+                )
+                return _card_callback_response(
+                    message,
+                    {"status": "confirmed", "mistake_id": str(mistake_id), "duplicate_action": True},
+                    delivery,
+                )
             result = workflow.confirm_mistake(
                 str(mistake_id),
                 ConfirmationRequest(action="confirm", confirmed_by="feishu_card"),
             )
             message = "已确认入库。错题卡和 D+1/D+3/D+7 复习任务已更新。"
             delivery = _try_reply_to_card_action(settings, payload, message)
+            _log_card_callback(
+                "confirmed",
+                action=action,
+                mistake_id=str(mistake_id),
+                delivery_mode=(delivery or {}).get("mode"),
+                elapsed_ms=_elapsed_ms(start),
+            )
             return _card_callback_response(message, result, delivery)
         if action == "shensi_discard":
+            existing = workflow.sqlite.get_mistake(str(mistake_id))
+            if existing and existing.get("status") == "discarded":
+                message = "这条分析已丢弃，无需重复操作。"
+                delivery = _try_reply_to_card_action(settings, payload, message)
+                _log_card_callback(
+                    "already_discarded",
+                    action=action,
+                    mistake_id=str(mistake_id),
+                    delivery_mode=(delivery or {}).get("mode"),
+                    elapsed_ms=_elapsed_ms(start),
+                )
+                return _card_callback_response(
+                    message,
+                    {"status": "discarded", "mistake_id": str(mistake_id), "duplicate_action": True},
+                    delivery,
+                )
             result = workflow.discard_mistake(str(mistake_id), confirmed_by="feishu_card")
             message = "已丢弃这条分析，不会写入错题卡或复习计划。"
             delivery = _try_reply_to_card_action(settings, payload, message)
+            _log_card_callback(
+                "discarded",
+                action=action,
+                mistake_id=str(mistake_id),
+                delivery_mode=(delivery or {}).get("mode"),
+                elapsed_ms=_elapsed_ms(start),
+            )
             return _card_callback_response(message, result, delivery)
         if action == "shensi_reanalyze":
             message = "重新分析功能正在接入。现在可以重新发送图片，再点击“慎思分析”。"
             delivery = _try_reply_to_card_action(settings, payload, message)
+            _log_card_callback(
+                "reanalyze_placeholder",
+                action=action,
+                mistake_id=str(mistake_id),
+                delivery_mode=(delivery or {}).get("mode"),
+                elapsed_ms=_elapsed_ms(start),
+            )
             return _card_callback_response(message, delivery=delivery)
         if action == "shensi_modify_confirm":
             message = "修改后入库功能正在接入。现在可以直接回复要修改的题号和内容。"
             delivery = _try_reply_to_card_action(settings, payload, message)
+            _log_card_callback(
+                "modify_placeholder",
+                action=action,
+                mistake_id=str(mistake_id),
+                delivery_mode=(delivery or {}).get("mode"),
+                elapsed_ms=_elapsed_ms(start),
+            )
             return _card_callback_response(message, delivery=delivery)
     except ValueError as exc:
+        _log_card_callback(
+            "error",
+            action=action,
+            mistake_id=str(mistake_id),
+            error=str(exc),
+            elapsed_ms=_elapsed_ms(start),
+        )
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
+    _log_card_callback(
+        "unsupported",
+        action=action,
+        mistake_id=str(mistake_id),
+        elapsed_ms=_elapsed_ms(start),
+    )
     raise HTTPException(status_code=400, detail=f"unsupported card action: {action}")
 
 
@@ -185,6 +266,7 @@ def _try_reply_to_card_action(
     payload: dict[str, Any],
     message: str,
 ) -> dict[str, Any] | None:
+    start = time.perf_counter()
     client = FeishuClient(settings)
     if not client.is_configured():
         return None
@@ -202,7 +284,12 @@ def _try_reply_to_card_action(
         )
         if message_id:
             response = client.reply_text(message_id=message_id, text=message)
-            return {"mode": "reply", "message_id": message_id, "feishu_response": response}
+            return {
+                "mode": "reply",
+                "message_id": message_id,
+                "elapsed_ms": _elapsed_ms(start),
+                "feishu_response": response,
+            }
 
         chat_id = _extract_first_string(
             payload,
@@ -220,9 +307,14 @@ def _try_reply_to_card_action(
                 receive_id_type="chat_id",
                 text=message,
             )
-            return {"mode": "send", "receive_id": chat_id, "feishu_response": response}
+            return {
+                "mode": "send",
+                "receive_id": chat_id,
+                "elapsed_ms": _elapsed_ms(start),
+                "feishu_response": response,
+            }
     except FeishuClientError as exc:
-        return {"mode": "failed", "error": str(exc)}
+        return {"mode": "failed", "elapsed_ms": _elapsed_ms(start), "error": str(exc)}
     return None
 
 
@@ -259,3 +351,16 @@ def _card_callback_response(
     if delivery is not None:
         payload["delivery"] = delivery
     return payload
+
+
+def _elapsed_ms(start: float) -> int:
+    return int((time.perf_counter() - start) * 1000)
+
+
+def _log_card_callback(phase: str, **fields: Any) -> None:
+    parts = [f"phase=card_callback_{phase}"]
+    for key, value in fields.items():
+        if value is None:
+            continue
+        parts.append(f"{key}={str(value).replace(chr(10), ' ')[:300]}")
+    print(" ".join(parts), flush=True)

@@ -679,6 +679,42 @@ def test_feishu_card_callback_accepts_json_string_action_value(tmp_path):
     assert client.get("/debug/counts").json()["reviews"] == 3
 
 
+def test_feishu_card_callback_confirm_is_idempotent(tmp_path):
+    settings = Settings(
+        db_path=tmp_path / "shensi.db",
+        vault_path=tmp_path / "vault" / "Shensi-Learning-Vault",
+    )
+    client = TestClient(create_app(settings))
+    ingest = client.post(
+        "/local/simulate-upload",
+        json={
+            "message_id": "card-confirm-idempotent-001",
+            "subject": "math",
+            "grade": "grade8",
+            "note": "card callback confirm idempotent",
+            "auto_confirm": False,
+        },
+    ).json()
+    payload = {
+        "event": {"context": {"open_message_id": "om_result_card"}},
+        "action": {
+            "value": {
+                "action": "shensi_confirm",
+                "mistake_id": ingest["mistake_id"],
+            }
+        },
+    }
+
+    first = client.post("/feishu/card-callback", json=payload)
+    second = client.post("/feishu/card-callback", json=payload)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["result"]["duplicate_action"] is True
+    assert "已确认" in second.json()["reply_text"]
+    assert client.get("/debug/counts").json()["reviews"] == 3
+
+
 def test_feishu_card_callback_discards_pending_mistake(tmp_path):
     settings = Settings(
         db_path=tmp_path / "shensi.db",

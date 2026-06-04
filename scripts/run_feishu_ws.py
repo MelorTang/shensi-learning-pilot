@@ -8,6 +8,7 @@ import sys
 import traceback
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -55,15 +56,23 @@ def _handle_card_action(data: Any, settings: Settings) -> Any:
 
     raw_text = lark.JSON.marshal(data)
     raw = json.loads(raw_text)
+    action = _extract_action(raw)
+    mistake_id = _extract_action_value(raw).get("mistake_id") or ""
+    start = time.perf_counter()
     callback_response = _post_card_callback(raw)
+    elapsed_ms = int((time.perf_counter() - start) * 1000)
     toast = callback_response.get("toast") or {
         "type": "success",
         "content": callback_response.get("reply_text") or "慎思已处理卡片操作。",
     }
     print(
         "received card.action.trigger "
-        f"action={_extract_action(raw)} "
-        f"toast={toast.get('content')}"
+        f"action={action} "
+        f"mistake_id={mistake_id} "
+        f"post_elapsed_ms={elapsed_ms} "
+        f"delivery_mode={(callback_response.get('delivery') or {}).get('mode')} "
+        f"toast={toast.get('content')}",
+        flush=True,
     )
     return P2CardActionTriggerResponse({"toast": toast})
 
