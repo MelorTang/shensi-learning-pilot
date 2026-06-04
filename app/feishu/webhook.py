@@ -4,7 +4,7 @@ import json
 import time
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
 from app.config import Settings
 from app.feishu.cards import build_pending_mistake_card
@@ -49,7 +49,10 @@ async def receive_webhook(request: Request) -> dict[str, Any]:
 
 
 @router.post("/card-callback")
-async def receive_card_callback(request: Request) -> dict[str, Any]:
+async def receive_card_callback(
+    request: Request,
+    background_tasks: BackgroundTasks,
+) -> dict[str, Any]:
     start = time.perf_counter()
     payload = await request.json()
     challenge = payload.get("challenge")
@@ -88,11 +91,18 @@ async def receive_card_callback(request: Request) -> dict[str, Any]:
                     {"status": "confirmed", "mistake_id": str(mistake_id), "duplicate_action": True},
                     delivery,
                 )
-            result = workflow.confirm_mistake(
+            # Fast path: update status synchronously, defer artifacts.
+            result = workflow._confirm_mistake_core(
                 str(mistake_id),
                 ConfirmationRequest(action="confirm", confirmed_by="feishu_card"),
             )
-            message = "已确认入库。错题卡和 D+1/D+3/D+7 复习任务已更新。"
+            if result["status"] == "confirmed":
+                background_tasks.add_task(
+                    _run_confirmation_artifacts,
+                    workflow,
+                    str(mistake_id),
+                )
+            message = "已确认入库。错题卡和复习任务即将更新。"
             delivery = _try_reply_to_card_action(settings, payload, message)
             _log_card_callback(
                 "confirmed",
@@ -119,7 +129,10 @@ async def receive_card_callback(request: Request) -> dict[str, Any]:
                     {"status": "discarded", "mistake_id": str(mistake_id), "duplicate_action": True},
                     delivery,
                 )
-            result = workflow.discard_mistake(str(mistake_id), confirmed_by="feishu_card")
+            result = workflow._confirm_mistake_core(
+                str(mistake_id),
+                ConfirmationRequest(action="discard", confirmed_by="feishu_card"),
+            )
             message = "已丢弃这条分析，不会写入错题卡或复习计划。"
             delivery = _try_reply_to_card_action(settings, payload, message)
             _log_card_callback(
@@ -351,6 +364,38 @@ def _card_callback_response(
     if delivery is not None:
         payload["delivery"] = delivery
     return payload
+
+
+def _run_confirmation_artifacts(
+    workflow: MistakeWorkflowService,
+    mistake_id: str,
+) -> None:
+    """Background task: write notes, concepts, reviews, reports.
+
+    Called via FastAPI BackgroundTasks after the card callback already
+    returned a toast.  Errors are logged but not surfaced to the user
+    (the mistake status is already persisted).
+    """
+    start = time.perf_counter()
+    try:
+        artifacts = workflow._write_confirmation_artifacts(mistake_id)
+        _log_card_callback(
+            "artifacts_done",
+            action="bg_artifacts",
+            mistake_id=mistake_id,
+            note_path=artifacts.get("note_path", ""),
+            review_count=len(artifacts.get("reviews", [])),
+            elapsed_ms=_elapsed_ms(start),
+        )
+    except Exception:
+        import traceback
+        _log_card_callback(
+            "artifacts_failed",
+            action="bg_artifacts",
+            mistake_id=mistake_id,
+            error=traceback.format_exc()[:500],
+            elapsed_ms=_elapsed_ms(start),
+        )
 
 
 def _elapsed_ms(start: float) -> int:

@@ -313,6 +313,26 @@ class MistakeWorkflowService:
         return result
 
     def confirm_mistake(self, mistake_id: str, request: ConfirmationRequest) -> dict[str, Any]:
+        """Full synchronous confirmation — status update + all artifacts.
+
+        For latency-sensitive callers (Feishu card callbacks), prefer
+        _confirm_mistake_core + _write_confirmation_artifacts split.
+        """
+        result = self._confirm_mistake_core(mistake_id, request)
+        if result["status"] == "confirmed":
+            artifacts = self._write_confirmation_artifacts(mistake_id)
+            result.update(artifacts)
+        return result
+
+    def _confirm_mistake_core(
+        self, mistake_id: str, request: ConfirmationRequest
+    ) -> dict[str, Any]:
+        """Fast path: validate, save confirmation, update DB status.
+
+        Returns {status, mistake_id, ...} so the caller can show a toast
+        immediately.  Does NOT write notes, concept cards, reviews or reports.
+        Those live in _write_confirmation_artifacts.
+        """
         mistake = self.sqlite.get_mistake(mistake_id)
         if not mistake:
             raise ValueError(f"Unknown mistake_id: {mistake_id}")
@@ -350,8 +370,7 @@ class MistakeWorkflowService:
                 self.sqlite.update_message_status(final_analysis["message_id"], "discarded")
             return {"status": "discarded", "mistake_id": mistake_id}
 
-        note_path = self.obsidian.write_mistake_note(final_analysis)
-        final_analysis["note_path"] = str(note_path)
+        # Persist the confirmed status so the DB is consistent immediately.
         self.sqlite.upsert_mistake(
             mistake
             | {
@@ -360,7 +379,6 @@ class MistakeWorkflowService:
                 "date": final_analysis["date"],
                 "title": final_analysis["title"],
                 "image_path": final_analysis["image_path"],
-                "note_path": str(note_path),
                 "raw_json_path": str(final_path),
                 "severity": final_analysis["severity"],
                 "confidence": final_analysis["confidence"],
@@ -368,6 +386,37 @@ class MistakeWorkflowService:
                 "updated_at": now,
             }
         )
+        if final_analysis.get("message_id"):
+            self.sqlite.update_message_status(final_analysis["message_id"], "confirmed")
+
+        return {"status": "confirmed", "mistake_id": mistake_id}
+
+    def _write_confirmation_artifacts(self, mistake_id: str) -> dict[str, Any]:
+        """Heavy post-confirmation work: notes, concepts, reviews, reports.
+
+        Safe to call from a background task after _confirm_mistake_core.
+        Reads the persisted confirmation JSON and mistake record to
+        regenerate all derived files and index entries.
+        """
+        mistake = self.sqlite.get_mistake(mistake_id)
+        if not mistake:
+            raise ValueError(f"Unknown mistake_id: {mistake_id}")
+        final_analysis = self.sqlite.read_json_file(mistake.get("raw_json_path"))
+        if not final_analysis:
+            raise ValueError(f"Missing confirmation JSON for mistake_id: {mistake_id}")
+
+        now = self._now()
+
+        note_path = self.obsidian.write_mistake_note(final_analysis)
+        final_analysis["note_path"] = str(note_path)
+        self.sqlite.upsert_mistake(
+            mistake
+            | {
+                "note_path": str(note_path),
+                "updated_at": now,
+            }
+        )
+
         for concept_name in final_analysis.get("concepts", []):
             concept_id = self._stable_id(
                 "concept",
@@ -403,11 +452,7 @@ class MistakeWorkflowService:
             self.sqlite.upsert_review(review)
         daily_report = self.reports.generate_daily(base_date, now)
         weekly_report = self.reports.generate_weekly(base_date, now)
-        if final_analysis.get("message_id"):
-            self.sqlite.update_message_status(final_analysis["message_id"], "confirmed")
         return {
-            "status": "confirmed",
-            "mistake_id": mistake_id,
             "note_path": str(note_path),
             "reviews": reviews,
             "daily_report": daily_report,
