@@ -97,12 +97,12 @@ Recommended result card buttons:
 
 - 确认入库: `value.action = shensi_confirm`
 - 丢弃: `value.action = shensi_discard`
-- 重新分析: `value.action = shensi_reanalyze`
-- 修改后入库: `value.action = shensi_modify_confirm`
 
-Each card button should include `value.mistake_id`. The future Feishu card
-callback handler can route these actions to Shensi confirm, discard, reanalyze,
-or modify-confirm APIs without asking the parent to type IDs.
+Each card button should include `value.mistake_id`. Keep the card actions to
+final decisions only. If the parent wants to correct the analysis, they should
+reply in natural language with the question number and correction details; Hermes
+can turn that into a Shensi modification call before asking the parent to
+confirm.
 
 Shensi exposes the latest pending card JSON for Hermes:
 
@@ -159,7 +159,7 @@ Implemented button actions:
 - `shensi_confirm`: confirm the given `mistake_id`
 - `shensi_discard`: discard the given `mistake_id`
 
-Draft button actions that return guidance for now:
+Legacy actions kept only for old cards:
 
 - `shensi_reanalyze`
 - `shensi_modify_confirm`

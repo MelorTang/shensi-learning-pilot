@@ -153,7 +153,10 @@ return the old result.
 Recommended Feishu UX:
 
 - Bot menu: `慎思分析`, `今日日报`, `复习任务`, `帮助`
-- Result card buttons: `确认入库`, `丢弃`, `重新分析`, `修改后入库`
+- Result card buttons: `确认入库`, `丢弃`
+- If the parent wants to change the analysis, they should reply naturally with
+  the question number and correction details. Hermes can then call the Shensi
+  modification flow before the parent confirms.
 - Keep confirm/discard actions on the card, because they belong to one specific
   analysis result.
 - Feishu card callback endpoint: `POST /feishu/card-callback`

@@ -131,7 +131,7 @@ async def receive_card_callback(request: Request) -> dict[str, Any]:
             )
             return _card_callback_response(message, result, delivery)
         if action == "shensi_reanalyze":
-            message = "重新分析功能正在接入。现在可以重新发送图片，再点击“慎思分析”。"
+            message = "如需重新分析，请重新发送图片后再点击“慎思分析”。"
             delivery = _try_reply_to_card_action(settings, payload, message)
             _log_card_callback(
                 "reanalyze_placeholder",
@@ -142,7 +142,7 @@ async def receive_card_callback(request: Request) -> dict[str, Any]:
             )
             return _card_callback_response(message, delivery=delivery)
         if action == "shensi_modify_confirm":
-            message = "修改后入库功能正在接入。现在可以直接回复要修改的题号和内容。"
+            message = "需要修改时，直接回复要改的题号和内容；我会先更新分析，再请你确认入库。"
             delivery = _try_reply_to_card_action(settings, payload, message)
             _log_card_callback(
                 "modify_placeholder",

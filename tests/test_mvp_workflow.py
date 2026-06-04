@@ -303,7 +303,7 @@ def test_hermes_parent_friendly_latest_pending_flow(tmp_path):
     assert card_payload["suppress_followup_text"] is True
     assert "共 3 题｜对 2 题｜错 1 题" in card_payload["card"]["elements"][0]["text"]["content"]
     card_actions = card_payload["card"]["elements"][-1]["actions"]
-    assert [item["text"]["content"] for item in card_actions] == ["确认入库", "丢弃", "重新分析", "修改后入库"]
+    assert [item["text"]["content"] for item in card_actions] == ["确认入库", "丢弃"]
     assert all(item["value"]["mistake_id"] == pending["mistake_id"] for item in card_actions)
 
     confirmation = client.post(
@@ -575,12 +575,10 @@ def test_feishu_pending_mistake_card_contract():
     assert "(2)错：斜率公式分子顺序反了" in card_text
     assert "**知识点**：一次函数" in card_text
     actions = card["elements"][-1]["actions"]
-    assert [item["text"]["content"] for item in actions] == ["确认入库", "丢弃", "重新分析", "修改后入库"]
+    assert [item["text"]["content"] for item in actions] == ["确认入库", "丢弃"]
     assert [item["value"]["action"] for item in actions] == [
         "shensi_confirm",
         "shensi_discard",
-        "shensi_reanalyze",
-        "shensi_modify_confirm",
     ]
     assert all(item["value"]["mistake_id"] == "mistake-001" for item in actions)
 

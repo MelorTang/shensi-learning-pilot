@@ -85,12 +85,19 @@ def build_pending_mistake_card(pending: dict[str, Any]) -> dict[str, Any]:
 
     elements.append(
         {
+            "tag": "div",
+            "text": {
+                "tag": "lark_md",
+                "content": "**需要修改？** 直接回复要改的题号和内容，再确认入库。",
+            },
+        }
+    )
+    elements.append(
+        {
             "tag": "action",
             "actions": [
                 _button("\u786e\u8ba4\u5165\u5e93", "primary", "shensi_confirm", mistake_id),
                 _button("\u4e22\u5f03", "danger", "shensi_discard", mistake_id),
-                _button("\u91cd\u65b0\u5206\u6790", "default", "shensi_reanalyze", mistake_id),
-                _button("\u4fee\u6539\u540e\u5165\u5e93", "default", "shensi_modify_confirm", mistake_id),
             ],
         }
     )

@@ -75,8 +75,11 @@ If the parent clicks a Feishu card button, route by `value.action`:
 
 - `shensi_confirm`
 - `shensi_discard`
-- `shensi_reanalyze`
-- `shensi_modify_confirm`
+
+New Shensi cards only expose the two final-decision buttons above. If the
+parent wants to change the analysis, ask them to reply naturally with the
+question number and correction details. Do not trigger another Antigravity image
+analysis unless the parent explicitly asks to reprocess the photo.
 
 Preferred behavior:
 
