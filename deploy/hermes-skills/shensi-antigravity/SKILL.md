@@ -39,10 +39,17 @@ This is a lightweight local file write. It should happen before any long model
 reasoning. The index lets later menu actions use the latest image from the same
 chat and sender instead of a global newest cache file.
 
+On image receipt, do not inspect the image content. Do not call `vision_analyze`,
+Antigravity, `agy`, browser tools, OCR tools, or any multimodal model. Do not
+summarize, translate, classify, or judge the homework. The only parent-facing
+reply after a bare image is:
+
+`已收到图片，点击「慎思分析」开始处理。`
+
 ## Main Flow
 
 1. On image receipt, index the local cached image path with
-   `shensi-index-image`.
+   `shensi-index-image`, then stop. Do not analyze the image yet.
 2. When the parent triggers analysis, send only:
    `正在分析这张错题，完成后我会发确认卡片。`
 3. Call the trusted cloud wrapper. Prefer an explicit image path when Hermes has
@@ -81,6 +88,9 @@ Preferred behavior:
 ## Output Policy
 
 Parent-facing messages must stay short and natural Chinese.
+
+Never answer Feishu parents in English unless they explicitly ask for English.
+For Shensi workflow messages, use simplified Chinese only.
 
 Allowed visible messages:
 

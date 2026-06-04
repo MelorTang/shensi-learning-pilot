@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 import json
 import sys
+import traceback
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -77,16 +78,40 @@ def _post_card_callback(payload: dict[str, Any]) -> dict[str, Any]:
     try:
         with urlopen(request, timeout=20) as response:
             raw = response.read().decode("utf-8")
-    except (HTTPError, URLError, TimeoutError) as exc:
+    except HTTPError as exc:
+        error_body = exc.read().decode("utf-8", errors="replace")
+        print(
+            "card callback HTTPError "
+            f"status={exc.code} reason={exc.reason} body={error_body[:1000]}",
+            file=sys.stderr,
+        )
+        return {
+            "toast": {
+                "type": "error",
+                "content": f"慎思处理卡片按钮失败：HTTP {exc.code}",
+            }
+        }
+    except (URLError, TimeoutError) as exc:
+        print(f"card callback request failed: {exc}", file=sys.stderr)
         return {
             "toast": {
                 "type": "error",
                 "content": f"慎思处理卡片按钮失败：{exc}",
             }
         }
+    except Exception as exc:
+        print(f"card callback unexpected error: {exc}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        return {
+            "toast": {
+                "type": "error",
+                "content": "慎思处理卡片按钮失败：转发服务异常",
+            }
+        }
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError:
+        print(f"card callback returned non-json: {raw[:1000]}", file=sys.stderr)
         return {
             "toast": {
                 "type": "error",
