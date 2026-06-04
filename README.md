@@ -213,6 +213,7 @@ you already have structured analysis.
 - `GET /hermes/pending/latest`
 - `GET /hermes/pending/latest/card`
 - `POST /hermes/pending/latest/card/send`
+- `POST /hermes/pending/latest/modify`
 - `POST /hermes/pending/latest/confirm`
 - `POST /hermes/pending/latest/discard`
 - `POST /reports/daily/regenerate`
@@ -237,6 +238,17 @@ POST /hermes/pending/latest/card/send
 Use either `{"reply_to_message_id":"<feishu message id>"}` to reply with a card,
 or `{"receive_id":"<chat id>","receive_id_type":"chat_id"}` to send the card to
 a chat.
+
+When the parent replies with natural correction text before confirmation, call:
+
+```text
+POST /hermes/pending/latest/modify
+```
+
+Body can be just `{"text":"第3题其实是对的，学生答案改成 k=2"}`. Hermes may also pass
+structured `question_updates` when it has already parsed the parent reply.
+Shensi keeps the item in `waiting_confirmation`, refreshes the pending summary,
+and returns a new Feishu card envelope for the parent to confirm.
 
 ## Generated Files
 

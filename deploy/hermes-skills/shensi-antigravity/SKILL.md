@@ -84,6 +84,11 @@ analysis unless the parent explicitly asks to reprocess the photo.
 Preferred behavior:
 
 - Let Shensi receive the card callback directly.
+- If the parent replies naturally with a correction before confirming, call
+  `POST http://127.0.0.1:8000/hermes/pending/latest/modify` with the parent text,
+  for example `{"text":"第3题其实是对的，学生答案改成 k=2"}`. If you already parsed the
+  reply, pass `question_updates` too. Send the returned interactive card, then
+  wait for the parent to confirm or discard.
 - If fallback text commands are used, call:
   - `POST /hermes/pending/latest/confirm`
   - `POST /hermes/pending/latest/discard`

@@ -12,6 +12,7 @@ from app.models.schemas import (
     HermesAnalysisIngestRequest,
     HermesMistakeIngestRequest,
     LocalUploadRequest,
+    PendingAnalysisModifyRequest,
     ReportDraftRequest,
 )
 from app.feishu.cards import build_pending_mistake_card
@@ -260,6 +261,34 @@ def hermes_discard_latest_pending(
     confirmed_by = (body.confirmed_by if body else None) or "feishu_parent"
     result = workflow.discard_mistake(latest["mistake_id"], confirmed_by=confirmed_by)
     result["reply_text"] = "已丢弃这条分析，不会写入错题卡或复习计划。"
+    return result
+
+
+@router.post("/hermes/pending/latest/modify")
+def hermes_modify_latest_pending(
+    body: PendingAnalysisModifyRequest,
+    request: Request,
+) -> dict[str, Any]:
+    workflow = MistakeWorkflowService(_settings(request))
+    latest = HermesService(workflow.sqlite).latest_pending()
+    if not latest["found"]:
+        return latest
+    try:
+        result = workflow.modify_pending_analysis(latest["mistake_id"], body)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    pending = HermesService(workflow.sqlite).latest_pending()
+    card = build_pending_mistake_card(pending) if pending.get("found") else None
+    result["pending"] = pending
+    result["reply_text"] = "已按你的说明更新分析，请再看一眼确认卡；没问题后点“确认入库”。"
+    result["final_message"] = result["reply_text"]
+    if card:
+        result["card"] = card
+        result["feishu_message"] = {
+            "msg_type": "interactive",
+            "content": json.dumps(card, ensure_ascii=False),
+        }
     return result
 
 

@@ -54,6 +54,13 @@ class ConfirmationRequest(BaseModel):
     overrides: dict[str, Any] = Field(default_factory=dict)
 
 
+class PendingAnalysisModifyRequest(BaseModel):
+    confirmed_by: str = "feishu_parent"
+    text: str = ""
+    overrides: dict[str, Any] = Field(default_factory=dict)
+    question_updates: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class ReportDraftRequest(BaseModel):
     report_type: Literal["daily", "weekly"]
     date: str | None = None

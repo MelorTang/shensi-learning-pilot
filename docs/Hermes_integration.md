@@ -410,9 +410,12 @@ POST /hermes/pending/latest/confirm or POST /hermes/pending/latest/discard.
 When Shensi receives `card.action.trigger`, it returns a toast and also tries to
 send a normal Feishu text reply back to the card message or chat, so the action
 has a visible conversation record.
-If the parent edits fields, call confirm with action="modify" and put allowed edits
-in overrides. If there are multiple pending items and the parent is ambiguous,
-ask which one they mean before confirming or discarding.
+If the parent edits fields before confirming, call
+`POST /hermes/pending/latest/modify` with the parent text and any structured
+`question_updates` Hermes has already parsed. Shensi keeps the item pending,
+refreshes the summary, and returns an updated interactive card. If there are
+multiple pending items and the parent is ambiguous, ask which one they mean
+before modifying, confirming, or discarding.
 
 Parent-facing output style:
 
