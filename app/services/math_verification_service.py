@@ -100,6 +100,7 @@ class MathVerificationService:
         first_parse_failed: dict[str, Any] | None = None
 
         for verifier in (
+            self._verify_point_on_line,
             self._verify_slope,
             self._verify_geometry_measure,
             self._verify_function_substitution,
@@ -308,6 +309,72 @@ class MathVerificationService:
             checks=checks,
         )
 
+    def _verify_point_on_line(self, question: str, answer_text: str) -> dict[str, Any]:
+        lower_question = question.lower()
+        lower_answer = answer_text.lower()
+        if not self._looks_like_point_on_line_question(lower_question, lower_answer):
+            return self._unsupported()
+
+        points = self._extract_labeled_points(question)
+        if len(points) < 3:
+            return self._unsupported()
+
+        target = self._pick_target_point(points, lower_question)
+        line_points = self._pick_line_points(points, target)
+        if target is None or len(line_points) < 2:
+            return self._unsupported()
+
+        target_name, target_x, target_y = target
+        first_name, x1, y1 = line_points[0]
+        second_name, x2, y2 = line_points[1]
+        dx = x2 - x1
+        dy = y2 - y1
+        if dx == 0:
+            expected_on_line = target_x == x1
+            lhs = Fraction(0) if expected_on_line else Fraction(1)
+            rhs = Fraction(0)
+        else:
+            lhs = (target_y - y1) * dx
+            rhs = dy * (target_x - x1)
+            expected_on_line = lhs == rhs
+
+        claimed_on_line = self._parse_on_line_claim(answer_text)
+        if claimed_on_line is None:
+            return self._parse_failed("point_on_line", "No on-line/not-on-line conclusion found.")
+
+        is_correct = claimed_on_line == expected_on_line
+        correct_answer = (
+            f"{target_name} is on line {first_name}{second_name}"
+            if expected_on_line
+            else f"{target_name} is not on line {first_name}{second_name}"
+        )
+        student_claim = "on" if claimed_on_line else "not on"
+        expected_claim = "on" if expected_on_line else "not on"
+        return self._verified(
+            method="point_on_line",
+            is_correct=is_correct,
+            correct_answer=correct_answer,
+            reason=(
+                ""
+                if is_correct
+                else (
+                    f"Point {target_name} should be {expected_claim} line "
+                    f"{first_name}{second_name}, but the answer says {student_claim}."
+                )
+            ),
+            checks=[
+                {
+                    "line": f"{first_name}{second_name}",
+                    "target": target_name,
+                    "collinearity_left": self._format_number(lhs),
+                    "collinearity_right": self._format_number(rhs),
+                    "expected_on_line": expected_on_line,
+                    "student_claim_on_line": claimed_on_line,
+                    "passed": is_correct,
+                }
+            ],
+        )
+
     def _verify_slope(self, question: str, answer_text: str) -> dict[str, Any]:
         if "斜率" not in question and "slope" not in question.lower() and "k" not in question:
             return self._unsupported()
@@ -471,6 +538,66 @@ class MathVerificationService:
                 }
             ],
         )
+
+    def _looks_like_point_on_line_question(self, question: str, answer_text: str) -> bool:
+        combined = f"{question}\n{answer_text}".lower()
+        return (
+            ("line" in combined and (" on " in combined or "not on" in combined))
+            or "在直线" in combined
+            or "不在直线" in combined
+            or "是否在" in combined
+        )
+
+    def _extract_labeled_points(self, text: str) -> list[tuple[str, Fraction, Fraction]]:
+        normalized = self._normalize_text(text)
+        matches = re.findall(
+            r"\b([A-Z])\s*\(\s*([+-]?\d+(?:/\d+)?(?:\.\d+)?)\s*[,，]\s*([+-]?\d+(?:/\d+)?(?:\.\d+)?)\s*\)",
+            normalized,
+        )
+        points: list[tuple[str, Fraction, Fraction]] = []
+        for name, x_text, y_text in matches:
+            try:
+                points.append((name, self._parse_number(x_text), self._parse_number(y_text)))
+            except ValueError:
+                continue
+        return points
+
+    def _pick_target_point(
+        self,
+        points: list[tuple[str, Fraction, Fraction]],
+        lower_question: str,
+    ) -> tuple[str, Fraction, Fraction] | None:
+        for point in points:
+            if point[0] == "Q":
+                return point
+        for point in reversed(points):
+            lower_name = point[0].lower()
+            if f"point {lower_name}" in lower_question or f"点{point[0]}" in lower_question:
+                return point
+        return points[-1] if points else None
+
+    def _pick_line_points(
+        self,
+        points: list[tuple[str, Fraction, Fraction]],
+        target: tuple[str, Fraction, Fraction] | None,
+    ) -> list[tuple[str, Fraction, Fraction]]:
+        if target is None:
+            return []
+        target_name = target[0]
+        named = {point[0]: point for point in points}
+        if "M" in named and "N" in named and target_name not in {"M", "N"}:
+            return [named["M"], named["N"]]
+        if "A" in named and "B" in named and target_name not in {"A", "B"}:
+            return [named["A"], named["B"]]
+        return [point for point in points if point[0] != target_name][:2]
+
+    def _parse_on_line_claim(self, text: str) -> bool | None:
+        normalized = self._normalize_text(text).lower()
+        if re.search(r"\bnot\s+on\b", normalized) or "不在" in normalized:
+            return False
+        if re.search(r"\bon\s+(?:the\s+)?line\b", normalized) or "在直线" in normalized:
+            return True
+        return None
 
     def _parse_ratio_side(
         self,

@@ -10,6 +10,7 @@ from app.config import Settings
 from app.feishu.cards import build_pending_mistake_card
 from app.main import create_app
 from app.models.schemas import LocalUploadRequest
+from app.services.math_verification_service import MathVerificationService
 from app.services.sqlite_service import SQLiteService
 from app.services.workflow_service import MistakeWorkflowService
 
@@ -651,6 +652,28 @@ def test_feishu_card_callback_discards_pending_mistake(tmp_path):
     assert body["result"]["status"] == "discarded"
     assert client.get("/mistakes", params={"status": "discarded"}).json()["items"][0]["id"] == ingest["mistake_id"]
     assert client.get("/debug/counts").json()["reviews"] == 0
+
+
+def test_math_verifier_checks_point_on_line_conclusion():
+    verifier = MathVerificationService()
+
+    result = verifier.verify_item(
+        {
+            "question": (
+                "Line MN passes through M(3,4) and N(0,-2). "
+                "Judge whether point Q(6,1) is on line MN."
+            ),
+            "student_answer": "Q is not on line MN.",
+            "is_correct": False,
+        }
+    )
+
+    assert result["status"] == "verified"
+    assert result["method"] == "point_on_line"
+    assert result["is_correct"] is True
+    assert result["correct_answer"] == "Q is not on line MN"
+    assert result["checks"][0]["expected_on_line"] is False
+    assert result["checks"][0]["student_claim_on_line"] is False
 
 
 def test_external_analysis_math_verifier_overrides_bad_llm_verdict(tmp_path):

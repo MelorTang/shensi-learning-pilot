@@ -157,6 +157,7 @@ algebra items:
 - linear function substitution such as `y=-3x+2` or `y = -3x + 2` with a given `x`
 - two-variable linear systems such as `x+y=10, 2x-y=2`
 - slope from two points such as `A(1,3), B(5,11)`
+- point-on-line conclusions from labeled points, such as whether `Q(6,1)` is on line `MN`
 - rectangle area/perimeter and triangle area when dimensions are explicit
 
 If the verifier can calculate the answer and disagrees with the LLM verdict,
