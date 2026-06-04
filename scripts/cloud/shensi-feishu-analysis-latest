@@ -162,6 +162,7 @@ PY_CARD
 
   log "phase=card_send_done message_id=$MESSAGE_ID elapsed_ms=$(( $(now_ms) - CARD_START_MS ))"
   log "phase=done message_id=$MESSAGE_ID total_elapsed_ms=$(( $(now_ms) - BG_START_MS ))"
-) >/dev/null 2>&1 &
+) </dev/null >/dev/null 2>&1 &
+disown
 
 echo "正在分析这张错题，完成后我会发确认卡片。"
