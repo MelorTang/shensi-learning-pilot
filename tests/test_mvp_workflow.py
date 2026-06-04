@@ -502,6 +502,7 @@ def test_feishu_pending_mistake_card_contract():
         {
             "mistake_id": "mistake-001",
             "title": "初二数学｜一次函数与方程组小测",
+            "concepts": ["一次函数"],
             "root_cause": "第3题斜率公式分子顺序反了。",
             "parent_guidance": "复习斜率公式。",
             "confirmation_summary": {
@@ -518,6 +519,7 @@ def test_feishu_pending_mistake_card_contract():
                     "id": 1,
                     "student_answer": "y=8",
                     "correct_answer": "y=8",
+                    "concept": "代入求值",
                     "is_correct": True,
                     "verification_status": "verified",
                 },
@@ -525,6 +527,7 @@ def test_feishu_pending_mistake_card_contract():
                     "id": 2,
                     "student_answer": "x=4,y=6",
                     "correct_answer": "x=4,y=6",
+                    "concept": "二元一次方程组",
                     "is_correct": True,
                     "verification_status": "verified",
                 },
@@ -532,6 +535,8 @@ def test_feishu_pending_mistake_card_contract():
                     "id": 3,
                     "student_answer": "k=-2",
                     "correct_answer": "k=2",
+                    "concept": "一次函数斜率",
+                    "error_reason": "斜率公式分子顺序反了",
                     "is_correct": False,
                     "verification_status": "unsupported",
                     "needs_parent_review": True,
@@ -551,6 +556,9 @@ def test_feishu_pending_mistake_card_contract():
     assert "规则验算：2/3" in card_text
     assert "仅模型判断：第3题" in card_text
     assert "需确认：第3题" in card_text
+    assert "逐题判断" in card_text
+    assert "**第3题**：斜率公式分子顺序反了" in card_text
+    assert "**涉及知识点**：一次函数" in card_text
     actions = card["elements"][-1]["actions"]
     assert [item["text"]["content"] for item in actions] == ["确认入库", "丢弃", "重新分析", "修改后入库"]
     assert [item["value"]["action"] for item in actions] == [
@@ -616,6 +624,46 @@ def test_feishu_card_callback_confirms_pending_mistake(tmp_path, monkeypatch):
     assert client.get("/debug/counts").json()["reviews"] == 3
 
 
+def test_feishu_card_callback_accepts_json_string_action_value(tmp_path):
+    settings = Settings(
+        db_path=tmp_path / "shensi.db",
+        vault_path=tmp_path / "vault" / "Shensi-Learning-Vault",
+    )
+    client = TestClient(create_app(settings))
+    ingest = client.post(
+        "/local/simulate-upload",
+        json={
+            "message_id": "card-confirm-json-string-001",
+            "subject": "math",
+            "grade": "grade8",
+            "note": "card callback confirm json string",
+            "auto_confirm": False,
+        },
+    ).json()
+
+    response = client.post(
+        "/feishu/card-callback",
+        json={
+            "event": {
+                "context": {"open_message_id": "om_result_card"},
+                "action": {
+                    "value": json.dumps(
+                        {
+                            "action": "shensi_confirm",
+                            "mistake_id": ingest["mistake_id"],
+                        }
+                    )
+                },
+            }
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["result"]["status"] == "confirmed"
+    assert client.get("/debug/counts").json()["reviews"] == 3
+
+
 def test_feishu_card_callback_discards_pending_mistake(tmp_path):
     settings = Settings(
         db_path=tmp_path / "shensi.db",
@@ -652,6 +700,44 @@ def test_feishu_card_callback_discards_pending_mistake(tmp_path):
     assert body["result"]["status"] == "discarded"
     assert client.get("/mistakes", params={"status": "discarded"}).json()["items"][0]["id"] == ingest["mistake_id"]
     assert client.get("/debug/counts").json()["reviews"] == 0
+
+
+def test_feishu_card_callback_accepts_nested_action_payload(tmp_path):
+    settings = Settings(
+        db_path=tmp_path / "shensi.db",
+        vault_path=tmp_path / "vault" / "Shensi-Learning-Vault",
+    )
+    client = TestClient(create_app(settings))
+    ingest = client.post(
+        "/local/simulate-upload",
+        json={
+            "message_id": "card-discard-nested-001",
+            "subject": "math",
+            "grade": "grade8",
+            "note": "card callback nested discard",
+            "auto_confirm": False,
+        },
+    ).json()
+
+    response = client.post(
+        "/feishu/card-callback",
+        json={
+            "event": {
+                "action": {
+                    "tag": "button",
+                    "value": {
+                        "payload": {
+                            "action": "shensi_discard",
+                            "mistakeId": ingest["mistake_id"],
+                        }
+                    },
+                }
+            }
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["result"]["status"] == "discarded"
 
 
 def test_math_verifier_checks_point_on_line_conclusion():

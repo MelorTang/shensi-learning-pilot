@@ -51,6 +51,8 @@ class HermesService:
                 {
                     "id": question_id,
                     "question": item.get("question") or "",
+                    "concept": item.get("concept") or "",
+                    "error_reason": item.get("error_reason") or "",
                     "student_answer": item.get("student_answer") or "",
                     "correct_answer": item.get("correct_answer") or "",
                     "is_correct": is_correct,

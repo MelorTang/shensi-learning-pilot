@@ -122,6 +122,11 @@ def _post_card_callback(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _extract_action(payload: dict[str, Any]) -> str:
+    action_value = _extract_action_value(payload)
+    return str(action_value.get("action") or "unknown")
+
+
+def _extract_action_value(payload: dict[str, Any]) -> dict[str, Any]:
     event = payload.get("event") if isinstance(payload.get("event"), dict) else {}
     action = payload.get("action") if isinstance(payload.get("action"), dict) else {}
     event_action = event.get("action") if isinstance(event.get("action"), dict) else {}
@@ -131,9 +136,51 @@ def _extract_action(payload: dict[str, Any]) -> str:
         event.get("action_value"),
         payload.get("value"),
     ):
-        if isinstance(candidate, dict) and candidate.get("action"):
-            return str(candidate["action"])
-    return "unknown"
+        parsed = _coerce_action_value(candidate)
+        if parsed:
+            return parsed
+    return _find_action_value(payload) or {}
+
+
+def _coerce_action_value(value: Any) -> dict[str, Any] | None:
+    if isinstance(value, str):
+        try:
+            decoded = json.loads(value)
+        except json.JSONDecodeError:
+            return None
+        return _coerce_action_value(decoded)
+    if not isinstance(value, dict):
+        return None
+
+    action = value.get("action")
+    mistake_id = value.get("mistake_id") or value.get("mistakeId")
+    if action and mistake_id:
+        normalized = dict(value)
+        normalized["mistake_id"] = mistake_id
+        return normalized
+
+    for key in ("value", "payload", "action_value", "data"):
+        parsed = _coerce_action_value(value.get(key))
+        if parsed:
+            return parsed
+    return None
+
+
+def _find_action_value(value: Any) -> dict[str, Any] | None:
+    parsed = _coerce_action_value(value)
+    if parsed:
+        return parsed
+    if isinstance(value, dict):
+        for child in value.values():
+            found = _find_action_value(child)
+            if found:
+                return found
+    elif isinstance(value, list):
+        for child in value:
+            found = _find_action_value(child)
+            if found:
+                return found
+    return None
 
 
 def main() -> None:

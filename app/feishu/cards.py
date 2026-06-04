@@ -48,10 +48,32 @@ def build_pending_mistake_card(pending: dict[str, Any]) -> dict[str, Any]:
             "tag": "div",
             "text": {
                 "tag": "lark_md",
-                "content": "\n".join(summary_lines),
+                "content": "**\u5206\u6790\u6982\u89c8**\n" + "\n".join(summary_lines),
             },
         }
     ]
+    question_lines = _question_lines(questions)
+    if question_lines:
+        elements.append(
+            {
+                "tag": "div",
+                "text": {
+                    "tag": "lark_md",
+                    "content": "**\u9010\u9898\u5224\u65ad**\n" + "\n".join(question_lines),
+                },
+            }
+        )
+    concepts = pending.get("concepts") or []
+    if concepts:
+        elements.append(
+            {
+                "tag": "div",
+                "text": {
+                    "tag": "lark_md",
+                    "content": f"**\u6d89\u53ca\u77e5\u8bc6\u70b9**\uff1a{_compact_list(concepts)}",
+                },
+            }
+        )
     if pending.get("root_cause"):
         elements.append(
             {
@@ -111,6 +133,39 @@ def _format_ids(ids: list[Any]) -> str:
     if not ids:
         return "\u65e0"
     return "\u3001".join(f"\u7b2c{item}\u9898" for item in ids)
+
+
+def _question_lines(questions: list[dict[str, Any]], limit: int = 8) -> list[str]:
+    lines = []
+    for item in questions[:limit]:
+        question_id = item.get("id") or "?"
+        status = _question_status(item)
+        reason = item.get("error_reason") or item.get("concept") or item.get("question") or ""
+        lines.append(f"{status} **\u7b2c{question_id}\u9898**\uff1a{_compact_text(reason, 54)}")
+    remaining = len(questions) - limit
+    if remaining > 0:
+        lines.append(f"\u8fd8\u6709 {remaining} \u9898\u672a\u5728\u5361\u7247\u5c55\u5f00\uff0c\u53ef\u786e\u8ba4\u540e\u8fdb\u5165\u9519\u9898\u5e93\u67e5\u770b\u3002")
+    return lines
+
+
+def _question_status(item: dict[str, Any]) -> str:
+    if item.get("is_correct") is False:
+        return "\u274c"
+    if item.get("needs_parent_review"):
+        return "\u26a0\ufe0f"
+    if item.get("is_correct") is True:
+        return "\u2705"
+    return "\u2022"
+
+
+def _compact_list(values: list[Any], limit: int = 6) -> str:
+    cleaned = [str(item).strip() for item in values if str(item).strip()]
+    if not cleaned:
+        return "\u5f85\u5f52\u7eb3"
+    visible = "\u3001".join(cleaned[:limit])
+    if len(cleaned) > limit:
+        return f"{visible} \u7b49"
+    return visible
 
 
 def _compact_text(text: Any, limit: int = 90) -> str:
