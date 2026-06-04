@@ -5,83 +5,74 @@ Use this skill when Hermes is acting as the Feishu entry agent for
 
 ## Core Principle
 
-Hermes is a **thin router**, not a homework judge. Every Shensi action maps to
-exactly one shell script or API call. There is no ambiguity — do NOT reason
-about which script to call. Just match the trigger and execute.
+Hermes is a **thin router**, not a homework judge. Every trigger maps to
+exactly one script or API call. No ambiguity — match and execute.
 
-**CRITICAL: This skill overrides Hermes' default behavior for ALL messages in
-Feishu DMs with Shensi parents. Do NOT run an LLM reasoning turn before acting.**
-If you receive a trigger phrase, call the corresponding script immediately.
-Do not analyze, summarize, classify, or judge the homework content yourself.
-
-## Trigger → Action Map (NO LLM REASONING NEEDED)
+## Trigger → Action Map
 
 | Trigger | Action | Reply |
 |---------|--------|-------|
-| Bare image received | `shensi-index-image <chat_id> <sender_id> <path>` | `已收到图片，点击「慎思分析」开始处理。` |
-| `慎思分析` | `shensi-feishu-analysis-latest <chat_id> <sender_id> math grade8 <image_path>` | `正在分析这张错题，完成后我会发确认卡片。` |
-| `今日日报` | `POST /hermes/reports/draft {"report_type":"daily"}`  | show the markdown summary |
+| Bare image received | index + start analysis immediately (see below) | `已收到图片，正在分析，约40秒后发确认卡片。` |
+| `慎思分析` (fallback) | `GET /hermes/pending/latest` → show card or status | see fallback logic below |
+| `今日日报` | `POST /hermes/reports/draft {"report_type":"daily"}` | show the markdown summary |
 | `复习任务` | `GET /reviews/today` | show review list |
-| `帮助` | none | show help text: `慎思分析 / 今日日报 / 复习任务 / 帮助` |
-| Parent correction text (题号 + 修改内容) | `shensi-pending-modify <chat_id> <text>` | `已更新分析，请查看新卡片确认。` |
-| Card button: confirm | Goes to Shensi `/feishu/card-callback` directly | (Shensi handles toast) |
-| Card button: discard | Goes to Shensi `/feishu/card-callback` directly | (Shensi handles toast) |
+| `帮助` | none | `慎思分析 / 今日日报 / 复习任务 / 帮助` |
+| Correction text (题号+修改) | `shensi-pending-modify <chat_id> <text>` | `已更新分析，请查看新卡片确认。` |
+| Card confirm/discard | Goes to Shensi directly | (Shensi handles toast) |
 
-## Strictly Forbidden Tools
+## Image Handling — START ANALYSIS IMMEDIATELY
 
-When this skill is active, NEVER call:
+When a Feishu image arrives, Hermes knows the local cached path.
+Do ALL of the following. Do NOT skip step 2.
 
-- Any vision / multimodal model (the model may not even support it)
-- `vision_analyze`, `analyze_image`, `describe_image`, `ocr`
-- Browser tools (`browser_navigate`, `browser_screenshot`, etc.)
-- File readers that inspect image content
-- Any tool that downloads or re-uploads the image
-- Any Antigravity/Gemini wrapper except as directed above
+1. Index the image:
+   ```bash
+   /home/admin/bin/shensi-index-image <chat_id> <sender_id> <image_path>
+   ```
 
-The image is handled by the cloud wrapper scripts. Hermes only passes paths.
+2. **Start analysis immediately.** Do NOT wait for the parent to say anything:
+   ```bash
+   /home/admin/bin/shensi-feishu-analysis-latest <chat_id> <sender_id> math grade8 <image_path>
+   ```
+   This wrapper spawns agy in background and returns immediately.
+   It will send the Feishu card automatically when done (~40s).
 
-## Image Handling (MOST IMPORTANT)
+3. Reply exactly:
+   `已收到图片，正在分析，约40秒后发确认卡片。`
 
-When a Feishu image arrives:
-1. Hermes knows the local cached path (provided by the Feishu adapter).
-2. Call `shensi-index-image` immediately. This writes a tiny path file.
-3. Reply with the fixed text. STOP. Do nothing else.
-4. Do NOT call any model with the image. Do NOT describe the image.
-5. Do NOT call `shensi-feishu-analysis-latest` yet — wait for `慎思分析`.
+4. Do NOT call any vision model, browser, OCR, or image inspection tool.
 
-## Analysis Flow
+## "慎思分析" — Fallback Status Check
 
-When the parent says `慎思分析`:
-1. Reply immediately: `正在分析这张错题，完成后我会发确认卡片。`
-2. Call the wrapper. The wrapper runs everything in background and returns quickly.
-3. Do NOT wait for the analysis result. The wrapper sends the card itself.
-4. Do NOT send any extra text after the card arrives.
+The analysis already started when the image arrived. "慎思分析" is a fallback
+for when the card hasn't appeared yet or got lost.
+
+1. Call `GET http://127.0.0.1:8000/hermes/pending/latest`
+2. If `found: true`: the card is already ready. Show the card summary text
+   (from `reply_text`) and tell the parent to use the card buttons.
+3. If `found: false`: check if analysis is still running by looking for the agy
+   process or checking recent logs. Tell the parent: `分析仍在进行中，请稍候。`
+4. Do NOT call `shensi-feishu-analysis-latest` again — the first call is
+   already running.
 
 ## Correction Flow
 
 When the parent sends correction text (e.g., "第3题其实是对的"):
-1. Call `shensi-pending-modify` with the chat_id and the raw correction text.
-2. The wrapper updates the pending analysis and sends a refreshed card.
-3. Do NOT call `shensi-feishu-analysis-latest` (no re-analysis needed).
-4. Do NOT reason about whether the correction is valid.
+1. Call `shensi-pending-modify <chat_id> <text>`
+2. Do NOT call `shensi-feishu-analysis-latest` (no re-analysis needed)
+
+## Strictly Forbidden Tools
+
+NEVER call: vision models, `vision_analyze`, `describe_image`, `ocr`,
+browser tools, image inspectors. The image is handled by cloud wrappers.
 
 ## Response Policy
 
-- All replies MUST be in simplified Chinese.
-- Each reply MUST be under 50 characters unless showing report content.
+- All replies in simplified Chinese, under 50 chars unless showing report content.
 - Never expose: raw JSON, curl commands, file paths, tool call logs, model names.
-- Never send markdown fences or code blocks to Feishu unless the parent asked for them.
-- Never say "I'll analyze this" or "let me look at the image" — just run the script.
 
 ## Operator Notes
 
-Cloud scripts:
-- `/home/admin/bin/shensi-index-image`
-- `/home/admin/bin/shensi-feishu-analysis-latest`
-- `/home/admin/bin/shensi-pending-modify`
-
-Shensi API:
-- `http://127.0.0.1:8000`
-
-Logs:
-- `/home/admin/.hermes/logs/shensi-*.log`
+Scripts: `/home/admin/bin/shensi-{index-image,feishu-analysis-latest,pending-modify}`
+API: `http://127.0.0.1:8000`
+Logs: `/home/admin/.hermes/logs/shensi-*.log`
