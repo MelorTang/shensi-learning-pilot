@@ -574,7 +574,7 @@ def test_feishu_pending_mistake_card_contract():
     assert "初判错 **第3题**" in card_text
     assert "(1)对：代入正确" in card_text
     assert "(2)错：斜率公式分子顺序反了" in card_text
-    assert "**涉及知识点**：一次函数" in card_text
+    assert "**知识点**：一次函数" in card_text
     actions = card["elements"][-1]["actions"]
     assert [item["text"]["content"] for item in actions] == ["确认入库", "丢弃", "重新分析", "修改后入库"]
     assert [item["value"]["action"] for item in actions] == [

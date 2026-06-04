@@ -63,17 +63,6 @@ def build_pending_mistake_card(pending: dict[str, Any]) -> dict[str, Any]:
                 },
             }
         )
-    concepts = pending.get("concepts") or []
-    if concepts:
-        elements.append(
-            {
-                "tag": "div",
-                "text": {
-                    "tag": "lark_md",
-                    "content": f"**\u6d89\u53ca\u77e5\u8bc6\u70b9**\uff1a{_compact_list(concepts)}",
-                },
-            }
-        )
     if pending.get("root_cause"):
         elements.append(
             {
@@ -81,6 +70,17 @@ def build_pending_mistake_card(pending: dict[str, Any]) -> dict[str, Any]:
                 "text": {
                     "tag": "lark_md",
                     "content": f"**\u4e3b\u8981\u539f\u56e0**\uff1a{_compact_text(pending['root_cause'], 110)}",
+                },
+            }
+        )
+    concepts = pending.get("concepts") or []
+    if concepts:
+        elements.append(
+            {
+                "tag": "div",
+                "text": {
+                    "tag": "lark_md",
+                    "content": f"**\u77e5\u8bc6\u70b9**\uff1a{_compact_list(concepts)}",
                 },
             }
         )
@@ -167,13 +167,10 @@ def _question_brief(item: dict[str, Any]) -> str:
     if sub_items:
         return sub_items
 
-    concept = _display_concept(item.get("concept"))
     reason = str(item.get("error_reason") or "").strip()
     review_reason = str(item.get("review_reason") or "").strip()
     question = str(item.get("question") or "").strip()
     parts = []
-    if concept:
-        parts.append(concept)
     if reason:
         parts.append(_short_reason(reason))
     elif review_reason:

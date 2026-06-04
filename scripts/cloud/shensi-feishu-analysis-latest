@@ -108,6 +108,7 @@ log "phase=resolve_image chat=$CHAT_ID sender=$SENDER_ID image=$IMG image_source
   set -euo pipefail
   export SHENSI_CHAT_ID="$CHAT_ID"
   export SHENSI_SENDER_ID="$SENDER_ID"
+  export SHENSI_PARENT_LOG="$LOG"
 
   BG_START_MS="$(now_ms)"
   SUBMIT_START_MS="$(now_ms)"

@@ -11,10 +11,20 @@ VISION="${SHENSI_ANTIGRAVITY_VISION:-/home/admin/bin/shensi-antigravity-vision}"
 SHENSI_URL="${SHENSI_URL:-http://127.0.0.1:8000/ingest/mistake-analysis}"
 LOG_DIR="${SHENSI_LOG_DIR:-/home/admin/.hermes/logs}"
 LOG="$LOG_DIR/shensi-antigravity-submit.log"
+PARENT_LOG="${SHENSI_PARENT_LOG:-}"
 mkdir -p "$LOG_DIR"
 
+now_ms() {
+  date +%s%3N
+}
+
 log() {
-  echo "$(date -Is) $*" >> "$LOG"
+  local line
+  line="$(date -Is) $*"
+  echo "$line" >> "$LOG"
+  if [[ -n "$PARENT_LOG" ]]; then
+    echo "$line" >> "$PARENT_LOG"
+  fi
 }
 
 json_error() {
@@ -34,7 +44,8 @@ print(json.dumps({
 PY
 }
 
-log "start image=$IMAGE_PATH message_id=$MESSAGE_ID subject=$SUBJECT grade=$GRADE"
+SCRIPT_START_MS="$(now_ms)"
+log "phase=submit_wrapper_start image=$IMAGE_PATH message_id=$MESSAGE_ID subject=$SUBJECT grade=$GRADE"
 
 if [[ -z "$IMAGE_PATH" ]]; then
   json_error "input" "missing_image_path" "image_path argument is required" "$MESSAGE_ID" ""
@@ -57,6 +68,8 @@ VISION_ERR="$LOG_DIR/${SAFE_ID}.vision.err"
 PAYLOAD_JSON="$LOG_DIR/${SAFE_ID}.payload.json"
 RESPONSE_JSON="$LOG_DIR/${SAFE_ID}.shensi-response.json"
 
+VISION_START_MS="$(now_ms)"
+log "phase=vision_start message_id=$MESSAGE_ID image=$IMAGE_PATH"
 set +e
 "$VISION" "$IMAGE_PATH" "$SUBJECT" "$GRADE" >"$VISION_OUT" 2>"$VISION_ERR"
 vision_status=$?
@@ -69,7 +82,9 @@ if [[ "$vision_status" -ne 0 ]]; then
   json_error "vision" "vision_failed" "vision exited with status $vision_status" "$MESSAGE_ID" "$IMAGE_PATH"
   exit "$vision_status"
 fi
+log "phase=vision_done message_id=$MESSAGE_ID elapsed_ms=$(( $(now_ms) - VISION_START_MS )) output=$VISION_OUT error=$VISION_ERR"
 
+VALIDATE_START_MS="$(now_ms)"
 if ! python3 -m json.tool "$VISION_OUT" >/dev/null 2>>"$LOG"; then
   stdout_preview="$(head -80 "$VISION_OUT" | tr '\n' ' ' | cut -c1-1200)"
   stderr_preview="$(head -80 "$VISION_ERR" | tr '\n' ' ' | cut -c1-1200)"
@@ -77,7 +92,9 @@ if ! python3 -m json.tool "$VISION_OUT" >/dev/null 2>>"$LOG"; then
   json_error "vision" "invalid_json" "vision stdout was not valid JSON; see $VISION_OUT and $VISION_ERR" "$MESSAGE_ID" "$IMAGE_PATH"
   exit 10
 fi
+log "phase=vision_json_validated message_id=$MESSAGE_ID elapsed_ms=$(( $(now_ms) - VALIDATE_START_MS ))"
 
+PAYLOAD_START_MS="$(now_ms)"
 python3 - "$VISION_OUT" "$PAYLOAD_JSON" "$MESSAGE_ID" "$IMAGE_PATH" "$SUBJECT" "$GRADE" "$NOTE" <<'PY'
 import json
 import os
@@ -112,7 +129,10 @@ payload = {
 with open(payload_path, "w", encoding="utf-8") as f:
     json.dump(payload, f, ensure_ascii=False)
 PY
+log "phase=payload_build_done message_id=$MESSAGE_ID elapsed_ms=$(( $(now_ms) - PAYLOAD_START_MS )) payload=$PAYLOAD_JSON"
 
+INGEST_START_MS="$(now_ms)"
+log "phase=ingest_start message_id=$MESSAGE_ID url=$SHENSI_URL"
 set +e
 curl -sS -X POST "$SHENSI_URL" \
   -H "Content-Type: application/json" \
@@ -126,13 +146,16 @@ if [[ "$curl_status" -ne 0 ]]; then
   json_error "submit" "shensi_post_failed" "curl exited with status $curl_status" "$MESSAGE_ID" "$IMAGE_PATH"
   exit "$curl_status"
 fi
+log "phase=ingest_http_done message_id=$MESSAGE_ID elapsed_ms=$(( $(now_ms) - INGEST_START_MS )) response=$RESPONSE_JSON"
 
+RESPONSE_VALIDATE_START_MS="$(now_ms)"
 if ! python3 -m json.tool "$RESPONSE_JSON" >/dev/null 2>>"$LOG"; then
   response_preview="$(head -80 "$RESPONSE_JSON" | tr '\n' ' ' | cut -c1-1200)"
   log "shensi_invalid_json response=$response_preview"
   json_error "submit" "shensi_invalid_json" "Shensi response was not valid JSON; see $RESPONSE_JSON" "$MESSAGE_ID" "$IMAGE_PATH"
   exit 11
 fi
+log "phase=ingest_json_validated message_id=$MESSAGE_ID elapsed_ms=$(( $(now_ms) - RESPONSE_VALIDATE_START_MS ))"
 
-log "done message_id=$MESSAGE_ID response_file=$RESPONSE_JSON"
+log "phase=submit_wrapper_done message_id=$MESSAGE_ID total_elapsed_ms=$(( $(now_ms) - SCRIPT_START_MS )) response_file=$RESPONSE_JSON"
 cat "$RESPONSE_JSON"
