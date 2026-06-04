@@ -63,7 +63,18 @@ Task:
    unreadable, still include a placeholder item with visible text and empty
    unknown fields. Never silently omit a visible question.
 4. Extract student steps and student answers.
-5. You may provide a preliminary correctness judgment, but Shensi will verify.
+5. Separate the printed question, the student's handwriting, and teacher/red
+   marks. Do not treat printed worked examples or red corrections as the
+   student's answer.
+6. Provide a correctness judgment only when the student's answer and enough
+   checking evidence are visible. If geometry proof, diagram reasoning, or
+   handwriting is unclear, set is_correct to null and explain uncertainty in
+   error_reason instead of guessing.
+7. For every question, write a short evidence-based error_reason. If the answer
+   appears correct, leave error_reason empty or explain the visible check.
+8. Be conservative: do not mark all questions wrong just because the page has
+   teacher marks. Prefer needs_parent_review-style uncertainty in the wording
+   when evidence is incomplete.
 
 Required JSON shape:
 {
@@ -81,7 +92,7 @@ Required JSON shape:
       "student_steps": ["..."],
       "student_answer": "...",
       "correct_answer": "...",
-      "is_correct": true,
+      "is_correct": null,
       "error_reason": "",
       "concept": "...",
       "error_type": ""

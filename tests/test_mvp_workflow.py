@@ -557,7 +557,8 @@ def test_feishu_pending_mistake_card_contract():
     assert "仅模型判断：第3题" in card_text
     assert "需确认：第3题" in card_text
     assert "逐题判断" in card_text
-    assert "**第3题**：斜率公式分子顺序反了" in card_text
+    assert "初判错，待确认 **第3题**" in card_text
+    assert "判断依据：斜率公式分子顺序反了" in card_text
     assert "**涉及知识点**：一次函数" in card_text
     actions = card["elements"][-1]["actions"]
     assert [item["text"]["content"] for item in actions] == ["确认入库", "丢弃", "重新分析", "修改后入库"]
