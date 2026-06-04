@@ -1,0 +1,16 @@
+[Unit]
+Description=Shensi Learning Pilot FastAPI
+After=network.target
+
+[Service]
+Type=simple
+User=admin
+WorkingDirectory=/home/admin/apps/shensi-learning-pilot
+EnvironmentFile=/home/admin/apps/shensi-learning-pilot/.env
+EnvironmentFile=-/home/admin/.hermes/.env
+ExecStart=/home/admin/apps/shensi-learning-pilot/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

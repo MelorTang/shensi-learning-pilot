@@ -403,7 +403,7 @@ Important cloud note:
   `HTTP 502` because the FastAPI process cannot read `FEISHU_APP_ID` /
   `FEISHU_APP_SECRET`.
 
-Cloud `shensi.service` example:
+Cloud `shensi-api.service` example:
 
 ```ini
 [Unit]
@@ -422,6 +422,16 @@ RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
+```
+
+The same template is committed at
+`deploy/systemd/shensi-api.service`. Install it on the cloud host with:
+
+```bash
+sudo cp deploy/systemd/shensi-api.service /etc/systemd/system/shensi-api.service
+sudo systemctl daemon-reload
+sudo systemctl enable shensi-api
+sudo systemctl restart shensi-api
 ```
 
 ### Option B: Webhook URL
@@ -484,7 +494,10 @@ ln -sf /home/admin/apps/shensi-learning-pilot/scripts/cloud/shensi-index-image /
 ln -sf /home/admin/apps/shensi-learning-pilot/scripts/cloud/shensi-feishu-analysis-latest /home/admin/bin/shensi-feishu-analysis-latest
 ln -sf /home/admin/apps/shensi-learning-pilot/scripts/cloud/shensi-antigravity-submit /home/admin/bin/shensi-antigravity-submit
 ln -sf /home/admin/apps/shensi-learning-pilot/scripts/cloud/shensi-antigravity-vision /home/admin/bin/shensi-antigravity-vision
-sudo systemctl restart shensi
+sudo cp deploy/systemd/shensi-api.service /etc/systemd/system/shensi-api.service
+sudo systemctl daemon-reload
+sudo systemctl enable shensi-api
+sudo systemctl restart shensi-api
 systemctl --user restart shensi-feishu-card
 curl http://127.0.0.1:8000/health
 ```
@@ -492,7 +505,7 @@ curl http://127.0.0.1:8000/health
 If Feishu card delivery fails after analysis completes, check:
 
 ```bash
-sudo systemctl cat shensi
+sudo systemctl cat shensi-api
 sudo tr '\0' '\n' </proc/$(pgrep -f "uvicorn app.main:app" | head -1)/environ | grep -E 'FEISHU_APP_ID|FEISHU_APP_SECRET|LARK_APP_ID|LARK_APP_SECRET'
 tail -n 80 ~/.hermes/logs/shensi-feishu-analysis-latest.log
 tail -n 120 ~/.hermes/logs/shensi-antigravity-submit.log
