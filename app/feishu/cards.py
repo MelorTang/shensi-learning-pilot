@@ -9,7 +9,6 @@ def build_pending_mistake_card(pending: dict[str, Any]) -> dict[str, Any]:
     mistake_id = pending.get("mistake_id") or ""
     questions = pending.get("questions") or []
     summary = pending.get("confirmation_summary") or {}
-    verification_summary = pending.get("verification_summary") or {}
     wrong_ids = [
         item.get("id")
         for item in questions
@@ -20,23 +19,12 @@ def build_pending_mistake_card(pending: dict[str, Any]) -> dict[str, Any]:
         for item in questions
         if item.get("needs_parent_review") and item.get("id") is not None
     ]
-    unsupported_ids = verification_summary.get("unsupported_question_ids") or [
-        item.get("id")
-        for item in questions
-        if item.get("verification_status") != "verified" and item.get("id") is not None
-    ]
     total_questions = summary.get("total_questions", len(questions))
-    verified_questions = verification_summary.get(
-        "verified_question_count",
-        summary.get("verified_questions", 0),
-    )
-    wrong_label = "\u89c4\u5219\u786e\u8ba4\u9519\u9898" if not unsupported_ids else "\u521d\u5224\u9519\u9898"
+    correct_count = len([item for item in questions if item.get("is_correct") is True])
+    wrong_count = len(wrong_ids)
     summary_lines = [
-        f"\u5171 {total_questions} \u9898\uff5c\u89c4\u5219\u9a8c\u7b97 {verified_questions}/{total_questions}",
-        f"{wrong_label}\uff1a{_format_ids(wrong_ids)}",
+        f"\u5171 {total_questions} \u9898\uff5c\u5bf9 {correct_count} \u9898\uff5c\u9519 {wrong_count} \u9898",
     ]
-    if unsupported_ids:
-        summary_lines.append(f"\u4ec5\u6a21\u578b\u5224\u65ad\uff1a{_format_ids(unsupported_ids)}")
     if review_ids:
         summary_lines.append(f"\u5efa\u8bae\u5bb6\u957f\u590d\u6838\uff1a{_format_ids(review_ids)}")
     if summary.get("extraction_complete") is False:
@@ -69,7 +57,7 @@ def build_pending_mistake_card(pending: dict[str, Any]) -> dict[str, Any]:
                 "tag": "div",
                 "text": {
                     "tag": "lark_md",
-                    "content": f"**\u4e3b\u8981\u539f\u56e0**\uff1a{_compact_text(pending['root_cause'], 110)}",
+                    "content": f"**\u4e3b\u8981\u539f\u56e0**\uff1a{_compact_text(pending['root_cause'], 160)}",
                 },
             }
         )
@@ -90,7 +78,7 @@ def build_pending_mistake_card(pending: dict[str, Any]) -> dict[str, Any]:
                 "tag": "div",
                 "text": {
                     "tag": "lark_md",
-                    "content": f"**\u5bb6\u957f\u5f15\u5bfc**\uff1a{_compact_text(pending['parent_guidance'], 110)}",
+                    "content": f"**\u5bb6\u957f\u5f15\u5bfc**\uff1a{_parent_guidance_text(pending['parent_guidance'])}",
                 },
             }
         )
@@ -149,16 +137,10 @@ def _question_lines(questions: list[dict[str, Any]], limit: int = 8) -> list[str
 
 
 def _question_status(item: dict[str, Any]) -> str:
-    if item.get("needs_parent_review"):
-        if item.get("is_correct") is False:
-            return "\u26a0\ufe0f \u521d\u5224\u9519"
-        if item.get("is_correct") is True:
-            return "\u26a0\ufe0f \u521d\u5224\u5bf9"
-        return "\u26a0\ufe0f \u5efa\u8bae\u590d\u6838"
     if item.get("is_correct") is False:
-        return "\u274c \u9519\u9898"
+        return "\u274c"
     if item.get("is_correct") is True:
-        return "\u2705 \u6b63\u786e"
+        return "\u2705"
     return "\u2022"
 
 
@@ -248,3 +230,35 @@ def _compact_text(text: Any, limit: int = 90) -> str:
     if len(value) <= limit:
         return value
     return f"{value[:limit].rstrip()}..."
+
+
+def _parent_guidance_text(text: Any) -> str:
+    value = " ".join(str(text).split())
+    if not value:
+        return "\u5148\u8ba9\u5b69\u5b50\u590d\u76d8\u9519\u9898\u539f\u56e0\uff0c\u518d\u91cd\u505a\u540c\u7c7b\u9898\u3002"
+
+    markers = ("1.", "1\uff0e", "1\u3001")
+    if any(marker in value for marker in markers):
+        value = _compact_numbered_guidance(value)
+
+    return _compact_text(value, 140)
+
+
+def _compact_numbered_guidance(text: str) -> str:
+    parts = []
+    for marker in ("1.", "2.", "3.", "1\uff0e", "2\uff0e", "3\uff0e", "1\u3001", "2\u3001", "3\u3001"):
+        text = text.replace(marker, f"\n{marker}")
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if line[0].isdigit():
+            line = line.split(".", 1)[-1] if "." in line else line
+            line = line.split("\uff0e", 1)[-1] if "\uff0e" in line else line
+            line = line.split("\u3001", 1)[-1] if "\u3001" in line else line
+            parts.append(line.strip(" \uff1a:"))
+        if len(parts) >= 3:
+            break
+    if parts:
+        return "\u5148\u6293\uff1a" + "\u3001".join(parts)
+    return text
