@@ -552,6 +552,7 @@ git pull
 source .venv/bin/activate
 python -m pytest
 chmod +x scripts/cloud/shensi-*
+ln -sf /home/admin/apps/shensi-learning-pilot/scripts/cloud/shensi-index-image /home/admin/bin/shensi-index-image
 ln -sf /home/admin/apps/shensi-learning-pilot/scripts/cloud/shensi-feishu-analysis-latest /home/admin/bin/shensi-feishu-analysis-latest
 ln -sf /home/admin/apps/shensi-learning-pilot/scripts/cloud/shensi-antigravity-submit /home/admin/bin/shensi-antigravity-submit
 ln -sf /home/admin/apps/shensi-learning-pilot/scripts/cloud/shensi-antigravity-vision /home/admin/bin/shensi-antigravity-vision
