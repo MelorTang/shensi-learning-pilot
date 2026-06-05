@@ -4,6 +4,7 @@ from pathlib import Path
 
 from app.feishu.router_helpers import (
     classify_intent,
+    format_review_items,
     index_image_path,
     resolve_indexed_image,
 )
@@ -37,6 +38,60 @@ class TestClassifyIntent:
 
     def test_correction_is_unknown(self) -> None:
         assert classify_intent("第三题其实是对的") == "unknown"
+
+    def test_daily_report_exact(self) -> None:
+        assert classify_intent("今日日报") == "daily_report"
+
+    def test_daily_report_short(self) -> None:
+        assert classify_intent("日报") == "daily_report"
+
+    def test_daily_report_variant(self) -> None:
+        assert classify_intent("今天日报") == "daily_report"
+        assert classify_intent("今日总结") == "daily_report"
+
+    def test_review_tasks_exact(self) -> None:
+        assert classify_intent("复习任务") == "review_tasks"
+
+    def test_review_tasks_variant(self) -> None:
+        assert classify_intent("今日复习") == "review_tasks"
+        assert classify_intent("今天复习") == "review_tasks"
+        assert classify_intent("待复习") == "review_tasks"
+
+    def test_daily_report_not_false_positive(self) -> None:
+        # "日报" alone is the trigger, "日报吗" is not
+        assert classify_intent("有日报吗") == "unknown"
+
+
+class TestFormatReviewItems:
+    def test_empty(self) -> None:
+        assert "暂无复习任务" in format_review_items([])
+
+    def test_single_item(self) -> None:
+        items = [{"title": "一元一次方程", "review_type": "D1"}]
+        result = format_review_items(items)
+        assert "一元一次方程" in result
+        assert "D+1" in result
+        assert "1." in result
+
+    def test_multiple_items(self) -> None:
+        items = [
+            {"title": "错题A", "review_type": "D1"},
+            {"title": "错题B", "review_type": "D3"},
+        ]
+        result = format_review_items(items)
+        assert "1." in result
+        assert "2." in result
+
+    def test_limit(self) -> None:
+        items = [{"title": f"错题{i}", "review_type": "D1"} for i in range(10)]
+        result = format_review_items(items)
+        assert "前 5 条" in result
+        assert "6." not in result
+
+    def test_falls_back_to_mistake_id(self) -> None:
+        items = [{"mistake_id": "abc123", "review_type": "D7"}]
+        result = format_review_items(items)
+        assert "abc123" in result
 
 
 class TestIndexImagePath:

@@ -22,6 +22,8 @@ def classify_intent(text: str) -> str:
       'shensi_analyze' — user wants analysis
       'confirm'        — user wants to confirm the latest pending result
       'discard'        — user wants to discard the latest pending result
+      'daily_report'   — user wants daily report
+      'review_tasks'   — user wants review tasks
       'help'           — user wants help
       'unknown'        — no recognised intent
     """
@@ -31,6 +33,20 @@ def classify_intent(text: str) -> str:
 
     if "慎思分析" in cleaned or "提交这张错题" in cleaned or "分析刚才" in cleaned:
         return "shensi_analyze"
+
+    # daily report
+    if any(
+        phrase in cleaned
+        for phrase in ("今日日报", "今天日报", "今日总结")
+    ) or cleaned == "日报":
+        return "daily_report"
+
+    # review tasks
+    if any(
+        phrase in cleaned
+        for phrase in ("复习任务", "今日复习", "今天复习", "待复习")
+    ):
+        return "review_tasks"
 
     if cleaned == "帮助" or cleaned.startswith("帮助"):
         return "help"
@@ -42,6 +58,37 @@ def classify_intent(text: str) -> str:
         return "discard"
 
     return "unknown"
+
+
+# ---------------------------------------------------------------------------
+# Review-item formatter (pure, testable)
+# ---------------------------------------------------------------------------
+
+def format_review_items(items: list[dict], limit: int = 5) -> str:
+    """Format review task items into a short message.
+
+    Returns a plain-text string suitable for a Feishu reply.
+    """
+    if not items:
+        return "今天暂无复习任务。"
+
+    lines: list[str] = []
+    for idx, item in enumerate(items[:limit], start=1):
+        title = item.get("title") or item.get("mistake_id", "?")
+        review_type = item.get("review_type", "")
+        # Un-Chinese the type for display
+        type_label = {
+            "D1": "D+1",
+            "D3": "D+3",
+            "D7": "D+7",
+        }.get(review_type, review_type)
+        lines.append(f"{idx}. {title}（{type_label}）")
+
+    header = f"今日复习任务（共 {len(items)} 条）："
+    if len(items) > limit:
+        header += f"\n（仅显示前 {limit} 条）"
+
+    return header + "\n" + "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------

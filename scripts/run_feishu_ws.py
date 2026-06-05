@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.config import Settings
 from app.feishu.client import FeishuClient, FeishuClientError
-from app.feishu.router_helpers import classify_intent, index_image_path, resolve_indexed_image
+from app.feishu.router_helpers import classify_intent, format_review_items, index_image_path, resolve_indexed_image
 from app.services.workflow_service import MistakeWorkflowService
 
 
@@ -215,6 +215,17 @@ def _shensi_post(endpoint: str, body: dict[str, Any] | None = None) -> dict[str,
         raise RuntimeError(f"Shensi API call failed: {endpoint}: {exc}") from exc
 
 
+def _shensi_get(endpoint: str) -> dict[str, Any]:
+    """Minimal GET to the local Shensi API."""
+    url = f"{SHENSI_API_BASE_URL}{endpoint}"
+    req = Request(url, headers={}, method="GET")
+    try:
+        with urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError) as exc:
+        raise RuntimeError(f"Shensi API GET failed: {endpoint}: {exc}") from exc
+
+
 # ── Router message handler ────────────────────────────────────────────
 
 def _handle_message_router(
@@ -310,11 +321,37 @@ def _handle_message_router(
                 pass
             return
 
+        if intent == "daily_report":
+            try:
+                result = _shensi_post("/reports/daily/regenerate")
+                summary = result.get("summary", "")
+                reply = summary or "今日日报已生成，可以在慎思知识库中查看。"
+            except RuntimeError:
+                reply = "生成日报失败，请稍后重试。"
+            try:
+                feishu_client.reply_text(message_id=message_id, text=reply)
+            except FeishuClientError:
+                pass
+            return
+
+        if intent == "review_tasks":
+            try:
+                result = _shensi_get("/reviews/today")
+                items = result.get("items") if isinstance(result, dict) else []
+                reply = format_review_items(items)
+            except RuntimeError:
+                reply = "获取复习任务失败，请稍后重试。"
+            try:
+                feishu_client.reply_text(message_id=message_id, text=reply)
+            except FeishuClientError:
+                pass
+            return
+
         if intent == "help":
             try:
                 feishu_client.reply_text(
                     message_id=message_id,
-                    text="发送图片自动分析。\n命令：慎思分析 / 确认入库 / 丢弃 / 帮助",
+                    text="发送图片自动分析。\n命令：慎思分析 / 今日日报 / 复习任务 / 确认入库 / 丢弃 / 帮助",
                 )
             except FeishuClientError:
                 pass
