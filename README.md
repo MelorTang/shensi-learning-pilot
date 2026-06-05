@@ -212,7 +212,6 @@ you already have structured analysis.
 - `GET /hermes/pending/latest`
 - `GET /hermes/pending/latest/card`
 - `POST /hermes/pending/latest/card/send`
-- `POST /hermes/pending/latest/modify`
 - `POST /hermes/pending/latest/confirm`
 - `POST /hermes/pending/latest/discard`
 - `POST /reports/daily/regenerate`
@@ -237,27 +236,6 @@ POST /hermes/pending/latest/card/send
 Use either `{"reply_to_message_id":"<feishu message id>"}` to reply with a card,
 or `{"receive_id":"<chat id>","receive_id_type":"chat_id"}` to send the card to
 a chat.
-
-When the parent replies with natural correction text before confirmation, call:
-
-```text
-POST /hermes/pending/latest/modify
-```
-
-Body can be just `{"text":"第3题其实是对的，学生答案改成 k=2"}`. Hermes may also pass
-structured `question_updates` when it has already parsed the parent reply.
-Shensi keeps the item in `waiting_confirmation`, refreshes the pending summary,
-and returns a new Feishu card envelope for the parent to confirm.
-
-On the cloud host, Hermes should use the wrapper instead of asking the parent to
-click analysis again:
-
-```bash
-/home/admin/bin/shensi-pending-modify <chat_id> <parent correction text>
-```
-
-The wrapper calls `/hermes/pending/latest/modify` and then sends a refreshed
-Feishu card through Shensi. It does not run Antigravity or reprocess the image.
 
 ## Generated Files
 
@@ -574,8 +552,6 @@ git pull
 source .venv/bin/activate
 python -m pytest
 chmod +x scripts/cloud/shensi-*
-ln -sf /home/admin/apps/shensi-learning-pilot/scripts/cloud/shensi-index-image /home/admin/bin/shensi-index-image
-ln -sf /home/admin/apps/shensi-learning-pilot/scripts/cloud/shensi-pending-modify /home/admin/bin/shensi-pending-modify
 ln -sf /home/admin/apps/shensi-learning-pilot/scripts/cloud/shensi-feishu-analysis-latest /home/admin/bin/shensi-feishu-analysis-latest
 ln -sf /home/admin/apps/shensi-learning-pilot/scripts/cloud/shensi-antigravity-submit /home/admin/bin/shensi-antigravity-submit
 ln -sf /home/admin/apps/shensi-learning-pilot/scripts/cloud/shensi-antigravity-vision /home/admin/bin/shensi-antigravity-vision

@@ -49,16 +49,9 @@ class HermesAnalysisIngestRequest(BaseModel):
 
 
 class ConfirmationRequest(BaseModel):
-    action: Literal["confirm", "discard", "modify"] = "confirm"
+    action: Literal["confirm", "discard"] = "confirm"
     confirmed_by: str = "local_parent"
     overrides: dict[str, Any] = Field(default_factory=dict)
-
-
-class PendingAnalysisModifyRequest(BaseModel):
-    confirmed_by: str = "feishu_parent"
-    text: str = ""
-    overrides: dict[str, Any] = Field(default_factory=dict)
-    question_updates: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class ReportDraftRequest(BaseModel):

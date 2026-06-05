@@ -162,7 +162,6 @@ Implemented button actions:
 Legacy actions kept only for old cards:
 
 - `shensi_reanalyze`
-- `shensi_modify_confirm`
 
 There are two callback modes:
 
@@ -408,25 +407,11 @@ If the parent clicks a result card button, route by `value.action`. If the
 parent types a fallback command like "确认入库" or "丢弃", call
 POST /hermes/pending/latest/confirm or POST /hermes/pending/latest/discard.
 When Shensi receives `card.action.trigger`, it returns a toast and also tries to
-send a normal Feishu text reply back to the card message or chat, so the action
-has a visible conversation record.
-If the parent edits fields before confirming, call
-`POST /hermes/pending/latest/modify` with the parent text and any structured
-`question_updates` Hermes has already parsed. Shensi keeps the item pending,
-refreshes the summary, and returns an updated interactive card. If there are
-multiple pending items and the parent is ambiguous, ask which one they mean
-before modifying, confirming, or discarding.
+send a normal Feishu text reply back to the card message or chat.
 
-On cloud, prefer the wrapper so Hermes does not accidentally route the edit back
-through image analysis:
-
-```bash
-/home/admin/bin/shensi-pending-modify <chat_id> <parent correction text>
-```
-
-For parent corrections to an existing pending card, never call
-`shensi-feishu-analysis-latest`, Antigravity, Gemini vision, or any image
-analysis wrapper unless the parent explicitly asks to reprocess the photo.
+**Pending modification is no longer supported.**  If the parent thinks the
+analysis is wrong, the correct flow is: tap 「丢弃」 → re-send or re-analyze
+the image.  Do not attempt to edit the pending analysis inline.
 
 Parent-facing output style:
 
