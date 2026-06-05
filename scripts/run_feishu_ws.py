@@ -320,7 +320,14 @@ def _handle_message_router(
                 pass
             return
 
-        # unknown — silently ignored (no LLM, no spam)
+        # unknown — reply short help (no LLM)
+        try:
+            feishu_client.reply_text(
+                message_id=message_id,
+                text="我现在只处理作业图片、慎思分析、确认入库、丢弃和帮助。请发送作业图片，或输入「帮助」查看用法。",
+            )
+        except FeishuClientError:
+            pass
         return
 
     # Other message types (audio, file, sticker, etc.) — ignored
