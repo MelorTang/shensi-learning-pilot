@@ -4,7 +4,6 @@ from pathlib import Path
 
 from app.feishu.router_helpers import (
     classify_intent,
-    format_review_items,
     index_image_path,
     resolve_indexed_image,
 )
@@ -49,38 +48,6 @@ class TestClassifyIntent:
         assert classify_intent("复习任务") == "unknown"
         assert classify_intent("今日复习") == "unknown"
         assert classify_intent("待复习") == "unknown"
-
-
-class TestFormatReviewItems:
-    def test_empty(self) -> None:
-        assert "暂无复习任务" in format_review_items([])
-
-    def test_single_item(self) -> None:
-        items = [{"title": "一元一次方程", "review_type": "D1"}]
-        result = format_review_items(items)
-        assert "一元一次方程" in result
-        assert "D+1" in result
-        assert "1." in result
-
-    def test_multiple_items(self) -> None:
-        items = [
-            {"title": "错题A", "review_type": "D1"},
-            {"title": "错题B", "review_type": "D3"},
-        ]
-        result = format_review_items(items)
-        assert "1." in result
-        assert "2." in result
-
-    def test_limit(self) -> None:
-        items = [{"title": f"错题{i}", "review_type": "D1"} for i in range(10)]
-        result = format_review_items(items)
-        assert "前 5 条" in result
-        assert "6." not in result
-
-    def test_falls_back_to_mistake_id(self) -> None:
-        items = [{"mistake_id": "abc123", "review_type": "D7"}]
-        result = format_review_items(items)
-        assert "abc123" in result
 
 
 class TestIndexImagePath:

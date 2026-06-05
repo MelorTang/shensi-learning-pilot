@@ -45,37 +45,6 @@ def classify_intent(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Review-item formatter (pure, testable)
-# ---------------------------------------------------------------------------
-
-def format_review_items(items: list[dict], limit: int = 5) -> str:
-    """Format review task items into a short message.
-
-    Returns a plain-text string suitable for a Feishu reply.
-    """
-    if not items:
-        return "今天暂无复习任务。"
-
-    lines: list[str] = []
-    for idx, item in enumerate(items[:limit], start=1):
-        title = item.get("title") or item.get("mistake_id", "?")
-        review_type = item.get("review_type", "")
-        # Un-Chinese the type for display
-        type_label = {
-            "D1": "D+1",
-            "D3": "D+3",
-            "D7": "D+7",
-        }.get(review_type, review_type)
-        lines.append(f"{idx}. {title}（{type_label}）")
-
-    header = f"今日复习任务（共 {len(items)} 条）："
-    if len(items) > limit:
-        header += f"\n（仅显示前 {limit} 条）"
-
-    return header + "\n" + "\n".join(lines)
-
-
-# ---------------------------------------------------------------------------
 # Index path helper (mirrors shensi-index-image logic)
 # ---------------------------------------------------------------------------
 

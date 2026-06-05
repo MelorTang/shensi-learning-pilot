@@ -152,14 +152,13 @@ return the old result.
 
 Recommended Feishu UX:
 
-- Bot menu: `慎思分析`, `今日日报`, `复习任务`, `帮助`
-- Result card buttons: `确认入库`, `丢弃`
-- If the parent wants to change the analysis, they should reply naturally with
-  the question number and correction details. Hermes can then call the Shensi
-  modification flow before the parent confirms.
-- Keep confirm/discard actions on the card, because they belong to one specific
-  analysis result.
-- Feishu card callback endpoint: `POST /feishu/card-callback`
+**慎思错题机器人**
+- Send an image → auto-analysis → interactive card with `确认入库` / `丢弃`
+- Text commands: `慎思分析`, `确认入库`, `丢弃`, `帮助`
+- Card buttons route directly to Shensi `/feishu/card-callback`
+
+**慎思辅导机器人**
+- `今日日报` / `复习任务` / general study questions → Hermes + shensi-tutor skill
 
 Shensi now also runs a deterministic math verification layer after Hermes
 submits extracted JSON. The current MVP verifier covers common junior-high

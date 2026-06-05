@@ -13,16 +13,18 @@ deduplication, parent confirmation, review scheduling, and report generation.
 ## Trigger
 
 Use this skill when the parent clearly asks Shensi to process a recently sent
-homework image, asks to confirm/discard a pending Shensi result, or replies with
-corrections to a pending Shensi result. Typical trigger phrases:
+homework image or asks to confirm/discard a pending Shensi result.
+Typical trigger phrases:
 
 - `慎思分析`
 - `提交这张错题`
 - `分析刚才的图片`
 - `慎思：分析刚才图片`
-- `慎思：查看今日日报`
-- `慎思：查看复习任务`
 - `慎思：帮助`
+
+> **Note:** This skill is a historical Hermes entry point. 当前推荐使用
+> **Shensi Direct Router**（`run_feishu_ws.py --router`）。日报和复习任务已迁移到
+> `shensi-tutor` skill（慎思辅导机器人）。
 
 For normal chat, encouragement, or general study questions, answer normally and
 do not call Shensi or Antigravity wrappers.
