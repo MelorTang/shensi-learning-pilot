@@ -37,16 +37,19 @@ skills are picked up.
 
 ## Purpose
 
-`shensi-antigravity` tells Hermes to:
+`shensi-antigravity` (historical / backup only) tells Hermes to:
 
 - treat itself as a thin Feishu router
 - call the trusted Shensi wrappers
 - avoid doing final homework judgment with Hermes' own vision model
-- avoid leaking tool logs and debug text into the parent chat
+
+> This skill is **no longer the recommended path**.  Use the Shensi Direct
+> Router (`run_feishu_ws.py --router`) for the mistake-entry bot instead.
 
 `shensi-tutor` tells Hermes to:
 
 - act as a study coach and review-explainer
-- query Shensi read-only APIs for stats, reviews, reports, and concept mistakes
+- query Shensi APIs for stats, reviews, reports, and concept mistakes
+- also call `POST /reports/daily/regenerate` to generate daily reports
 - never ingest images, confirm, discard, or call Antigravity wrappers
 - keep replies warm, concrete, and actionable
