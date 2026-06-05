@@ -4,21 +4,41 @@ import argparse
 from pathlib import Path
 from typing import Any
 import json
+import os
+import re
+import subprocess
 import sys
 import traceback
+import time
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
-import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.config import Settings
+from app.feishu.client import FeishuClient, FeishuClientError
+from app.feishu.router_helpers import classify_intent, index_image_path
 from app.services.workflow_service import MistakeWorkflowService
 
 
 SHENSI_API_BASE_URL = "http://127.0.0.1:8000"
 
+# ── Default paths (overridable via env) ──────────────────────────────
+_HERMES_HOME = Path(os.path.expanduser("~/.hermes"))
+_IMAGE_CACHE = Path(
+    os.environ.get("SHENSI_IMAGE_CACHE", str(_HERMES_HOME / "image_cache"))
+)
+_INDEX_DIR = Path(
+    os.environ.get("SHENSI_IMAGE_INDEX_DIR", str(_HERMES_HOME / "shensi_image_index"))
+)
+_ANALYSIS_BIN = os.environ.get(
+    "SHENSI_ANALYSIS_LATEST", "/home/admin/bin/shensi-feishu-analysis-latest"
+)
+_DEFAULT_SUBJECT = os.environ.get("SHENSI_DEFAULT_SUBJECT", "math")
+_DEFAULT_GRADE = os.environ.get("SHENSI_DEFAULT_GRADE", "grade8")
 
+
+# ── Helpers reused from webhook.py ────────────────────────────────────
 def _normalize_event(raw: dict[str, Any]) -> dict[str, Any]:
     if "event" in raw:
         return raw
@@ -29,6 +49,7 @@ def _normalize_event(raw: dict[str, Any]) -> dict[str, Any]:
     return raw
 
 
+# ── Existing message handler (used in default mode) ───────────────────
 def _handle_message_event(data: Any, settings: Settings) -> None:
     import lark_oapi as lark
 
@@ -47,6 +68,283 @@ def _handle_message_event(data: Any, settings: Settings) -> None:
         f"status={result.get('status')}"
     )
 
+
+# ── Router helpers ────────────────────────────────────────────────────
+
+def _safe_key(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]", "_", value)
+
+
+def _parse_router_message(raw: dict[str, Any]) -> dict[str, Any]:
+    """Extract message fields needed by the router from a Feishu event."""
+    event: dict[str, Any] = raw.get("event") if isinstance(raw.get("event"), dict) else {}
+    message: dict[str, Any] = (
+        event.get("message") if isinstance(event.get("message"), dict) else {}
+    )
+    sender: dict[str, Any] = (
+        event.get("sender") if isinstance(event.get("sender"), dict) else {}
+    )
+
+    message_id: str = (
+        raw.get("message_id")
+        or message.get("message_id")
+        or event.get("message_id")
+        or ""
+    )
+    chat_id: str = message.get("chat_id") or raw.get("chat_id") or ""
+    sender_id: str = (
+        sender.get("sender_id", {}).get("user_id")
+        or sender.get("sender_id", {}).get("open_id")
+        or raw.get("sender_id")
+        or ""
+    )
+    message_type: str = message.get("message_type") or raw.get("message_type") or ""
+
+    content_raw = message.get("content") or raw.get("content") or "{}"
+    try:
+        content: dict[str, Any] = json.loads(content_raw)
+    except (json.JSONDecodeError, TypeError):
+        content = {}
+    text: str = content.get("text", "")
+    image_key: str = content.get("image_key", "")
+
+    return {
+        "message_id": str(message_id),
+        "chat_id": str(chat_id),
+        "sender_id": str(sender_id),
+        "message_type": str(message_type),
+        "text": str(text),
+        "image_key": str(image_key),
+    }
+
+
+def _download_and_index_image(
+    message_id: str,
+    image_key: str,
+    chat_id: str,
+    sender_id: str,
+    feishu_client: FeishuClient,
+) -> Path | None:
+    """Download a Feishu image resource, save to cache, write index.  Returns cached path."""
+    if not image_key or not feishu_client.is_configured():
+        return None
+
+    try:
+        resource = feishu_client.download_message_resource(
+            message_id=message_id,
+            file_key=image_key,
+            resource_type="image",
+        )
+    except FeishuClientError:
+        traceback.print_exc(file=sys.stderr)
+        return None
+
+    _IMAGE_CACHE.mkdir(parents=True, exist_ok=True)
+    safe_msg = _safe_key(message_id)
+    cached = _IMAGE_CACHE / f"img_{safe_msg}{resource.suffix}"
+    cached.write_bytes(resource.data)
+
+    # Write index
+    index_target = index_image_path(chat_id, sender_id, index_dir=_INDEX_DIR)
+    index_target.parent.mkdir(parents=True, exist_ok=True)
+    index_target.write_text(str(cached))
+
+    print(
+        f"router image indexed message_id={message_id} "
+        f"image={cached} index={index_target} "
+        f"bytes={len(resource.data)}"
+    )
+    return cached
+
+
+def _resolve_image_for_analysis(chat_id: str, sender_id: str) -> Path | None:
+    """Find the best image for analysis: index first, then newest cache file."""
+    # 1) Indexed image
+    index_target = index_image_path(chat_id, sender_id, index_dir=_INDEX_DIR)
+    if index_target.exists():
+        indexed = index_target.read_text().strip()
+        if indexed and Path(indexed).exists():
+            return Path(indexed)
+
+    # 2) Newest file in image cache
+    if not _IMAGE_CACHE.is_dir():
+        return None
+    candidates = sorted(
+        _IMAGE_CACHE.glob("*"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    for candidate in candidates:
+        if candidate.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}:
+            return candidate
+    return None
+
+
+def _spawn_analysis(
+    chat_id: str,
+    sender_id: str,
+    image_path: Path,
+    *,
+    subject: str = _DEFAULT_SUBJECT,
+    grade: str = _DEFAULT_GRADE,
+) -> None:
+    """Spawn ``shensi-feishu-analysis-latest`` in a detached background process."""
+    cmd = [
+        _ANALYSIS_BIN,
+        chat_id,
+        sender_id,
+        subject,
+        grade,
+        str(image_path),
+    ]
+    print(f"router spawning analysis: {' '.join(cmd)}")
+    subprocess.Popen(
+        cmd,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+
+
+def _shensi_post(endpoint: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Minimal POST to the local Shensi API."""
+    url = f"{SHENSI_API_BASE_URL}{endpoint}"
+    data = (
+        json.dumps(body, ensure_ascii=False).encode("utf-8")
+        if body
+        else None
+    )
+    req = Request(
+        url,
+        data=data,
+        headers={"Content-Type": "application/json; charset=utf-8"},
+        method="POST",
+    )
+    try:
+        with urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError) as exc:
+        raise RuntimeError(f"Shensi API call failed: {endpoint}: {exc}") from exc
+
+
+# ── Router message handler ────────────────────────────────────────────
+
+def _handle_message_router(
+    data: Any,
+    settings: Settings,
+    feishu_client: FeishuClient,
+) -> None:
+    """Direct router: keyword/intent matching → shell script or Shensi API.
+
+    This handler does NOT call any LLM.  Image messages trigger background
+    Antigravity analysis.  Text messages are matched against a fixed
+    keyword table.
+    """
+    import lark_oapi as lark
+
+    raw_text = lark.JSON.marshal(data)
+    raw = json.loads(raw_text)
+    msg = _parse_router_message(raw)
+
+    message_id = msg["message_id"]
+    chat_id = msg["chat_id"]
+    sender_id = msg["sender_id"]
+    message_type = msg["message_type"]
+
+    if not message_id:
+        return
+
+    # ── Image ──────────────────────────────────────────────────
+    if message_type == "image":
+        image_key = msg["image_key"]
+        cached = None
+        if image_key:
+            cached = _download_and_index_image(
+                message_id, image_key, chat_id, sender_id, feishu_client
+            )
+        if cached:
+            _spawn_analysis(chat_id, sender_id, cached)
+        else:
+            # No download — still try to trigger with whatever image is cached
+            fallback = _resolve_image_for_analysis(chat_id, sender_id)
+            if fallback:
+                _spawn_analysis(chat_id, sender_id, fallback)
+
+        try:
+            feishu_client.reply_text(
+                message_id=message_id,
+                text="已收到图片，正在分析，约40秒后发确认卡片。",
+            )
+        except FeishuClientError:
+            pass
+        return
+
+    # ── Text ───────────────────────────────────────────────────
+    if message_type == "text":
+        text = msg["text"]
+        intent = classify_intent(text)
+
+        if intent == "shensi_analyze":
+            image = _resolve_image_for_analysis(chat_id, sender_id)
+            if image:
+                _spawn_analysis(chat_id, sender_id, image)
+                reply = "正在分析这张错题，完成后我会发确认卡片。"
+            else:
+                reply = "请先发送一张作业图片。"
+            try:
+                feishu_client.reply_text(message_id=message_id, text=reply)
+            except FeishuClientError:
+                pass
+            return
+
+        if intent == "confirm":
+            try:
+                result = _shensi_post(
+                    "/hermes/pending/latest/confirm",
+                    {"action": "confirm", "confirmed_by": "feishu_parent"},
+                )
+                reply = result.get("reply_text") or "已确认入库。"
+            except RuntimeError:
+                reply = "确认失败，请稍后重试。"
+            try:
+                feishu_client.reply_text(message_id=message_id, text=reply)
+            except FeishuClientError:
+                pass
+            return
+
+        if intent == "discard":
+            try:
+                result = _shensi_post(
+                    "/hermes/pending/latest/discard",
+                    {"action": "discard", "confirmed_by": "feishu_parent"},
+                )
+                reply = result.get("reply_text") or "已丢弃。"
+            except RuntimeError:
+                reply = "丢弃失败，请稍后重试。"
+            try:
+                feishu_client.reply_text(message_id=message_id, text=reply)
+            except FeishuClientError:
+                pass
+            return
+
+        if intent == "help":
+            try:
+                feishu_client.reply_text(
+                    message_id=message_id,
+                    text="发送图片自动分析。\n命令：慎思分析 / 确认入库 / 丢弃 / 帮助",
+                )
+            except FeishuClientError:
+                pass
+            return
+
+        # unknown — silently ignored (no LLM, no spam)
+        return
+
+    # Other message types (audio, file, sticker, etc.) — ignored
+
+
+# ── Card action handler (shared by all modes) ─────────────────────────
 
 def _handle_card_action(data: Any, settings: Settings) -> Any:
     import lark_oapi as lark
@@ -192,12 +490,25 @@ def _find_action_value(value: Any) -> dict[str, Any] | None:
     return None
 
 
+# ── Main ──────────────────────────────────────────────────────────────
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run Shensi Feishu long-connection handlers.")
-    parser.add_argument(
+    parser = argparse.ArgumentParser(
+        description="Run Shensi Feishu long-connection handlers."
+    )
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
         "--card-actions-only",
         action="store_true",
         help="Only forward Feishu card.action.trigger callbacks to Shensi.",
+    )
+    group.add_argument(
+        "--router",
+        action="store_true",
+        help=(
+            "Direct keyword router: handle im.message.receive_v1 with "
+            "fixed intent matching (no LLM).  Also forwards card actions."
+        ),
     )
     args = parser.parse_args()
 
@@ -211,25 +522,42 @@ def main() -> None:
 
     settings = Settings.load()
     if not settings.feishu_app_id or not settings.feishu_app_secret:
-        raise SystemExit("Please set SHENSI_FEISHU_APP_ID and SHENSI_FEISHU_APP_SECRET in .env")
+        raise SystemExit(
+            "Please set SHENSI_FEISHU_APP_ID and SHENSI_FEISHU_APP_SECRET in .env"
+        )
+
+    feishu_client = FeishuClient(settings)
 
     event_builder = lark.EventDispatcherHandler.builder("", "")
-    if not args.card_actions_only:
+
+    if args.router:
+        event_builder.register_p2_im_message_receive_v1(
+            lambda data: _handle_message_router(data, settings, feishu_client)
+        )
+    elif not args.card_actions_only:
         event_builder.register_p2_im_message_receive_v1(
             lambda data: _handle_message_event(data, settings)
         )
+
     event_handler = (
         event_builder.register_p2_card_action_trigger(
             lambda data: _handle_card_action(data, settings)
         ).build()
     )
+
     client = lark.ws.Client(
         settings.feishu_app_id,
         settings.feishu_app_secret,
         event_handler=event_handler,
         log_level=lark.LogLevel.INFO,
     )
-    mode = "card actions only" if args.card_actions_only else "messages and card actions"
+
+    if args.router:
+        mode = "direct router"
+    elif args.card_actions_only:
+        mode = "card actions only"
+    else:
+        mode = "messages and card actions"
     print(f"Starting Feishu long-connection client ({mode}). Press Ctrl+C to stop.")
     client.start()
 

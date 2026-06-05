@@ -366,11 +366,45 @@ Key defaults:
 
 ## Feishu Bot Setup
 
-The recommended path is to let Hermes Agent handle Feishu. Configure Hermes Agent's Feishu / Lark gateway, then have Hermes call `POST /ingest/mistake-image`.
+### Recommended: Shensi Direct Router (No LLM Latency)
+
+The fastest path for the parent experience is the **Shensi Direct Router**.  It
+handles `im.message.receive_v1` with fixed keyword matching — no LLM, no Hermes.
+
+```
+图片 → <1s → 下载+索引+后台启动 agy → "已收到图片，正在分析..."
+慎思分析 → <1s → 后台启动 agy → "正在分析..."
+确认入库 / 丢弃 → <1s → POST Shensi API
+```
+
+**Start the router:**
+
+```powershell
+python scripts/run_feishu_ws.py --router
+```
+
+**Cloud systemd service:**
+
+```bash
+sudo cp deploy/systemd/shensi-router.service /etc/systemd/system/shensi-router.service
+# or as a user service:
+systemctl --user enable shensi-router.service
+systemctl --user start shensi-router.service
+```
+
+The template is at `deploy/systemd/shensi-router.service`.
+
+When the direct router is running, **disable Hermes' `im.message.receive_v1`
+subscription** to avoid duplicate processing.  Hermes can still handle free-form
+conversation via a separate bot or slash commands.
+
+### Option B: Hermes Agent Gateway
+
+Configure Hermes Agent's Feishu / Lark gateway, then have Hermes call `POST /ingest/mistake-image`.
 
 The direct Shensi Feishu handlers below are kept as a fallback and local debugging option.
 
-### Option A: Long Connection
+### Option C: Long Connection (card-actions-only / legacy)
 
 This is the easiest local MVP path because it does not need a public domain.
 

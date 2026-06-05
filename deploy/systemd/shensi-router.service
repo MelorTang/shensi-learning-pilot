@@ -1,0 +1,15 @@
+[Unit]
+Description=Shensi Direct Feishu Router (no LLM)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/admin/apps/shensi-learning-pilot
+EnvironmentFile=/home/admin/apps/shensi-learning-pilot/.env
+EnvironmentFile=-/home/admin/.hermes/.env
+ExecStart=/home/admin/apps/shensi-learning-pilot/.venv/bin/python scripts/run_feishu_ws.py --router
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
