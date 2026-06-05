@@ -377,6 +377,9 @@ handles `im.message.receive_v1` with fixed keyword matching — no LLM, no Herme
 确认入库 / 丢弃 → <1s → POST Shensi API
 ```
 
+**Commands:** 慎思分析 / 确认入库 / 丢弃 / 帮助
+**Not handled:** 今日日报、复习任务、讲题 → 请使用「慎思辅导机器人」
+
 **Start the router locally:**
 
 ```powershell
@@ -416,8 +419,8 @@ cp /home/admin/apps/shensi-learning-pilot/deploy/hermes-skills/shensi-tutor/SKIL
 systemctl --user restart hermes-gateway
 ```
 
-- **慎思错题机器人**: shensi-router (no LLM) — image analysis, confirm/discard
-- **慎思辅导机器人**: Hermes + shensi-tutor skill — stats, reviews, coaching
+- **慎思错题机器人**: shensi-router (no LLM) — 错题图片入库闭环（分析、确认、丢弃）
+- **慎思辅导机器人**: Hermes + shensi-tutor skill — 日报、复习任务、讲题、学习建议、查询统计
 - Do NOT install shensi-antigravity on the tutor bot — it must not take over
   the mistake-ingest flow
 

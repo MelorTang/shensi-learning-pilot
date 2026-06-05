@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.config import Settings
 from app.feishu.client import FeishuClient, FeishuClientError
-from app.feishu.router_helpers import classify_intent, format_review_items, index_image_path, resolve_indexed_image
+from app.feishu.router_helpers import classify_intent, index_image_path, resolve_indexed_image
 from app.services.workflow_service import MistakeWorkflowService
 
 
@@ -321,37 +321,11 @@ def _handle_message_router(
                 pass
             return
 
-        if intent == "daily_report":
-            try:
-                result = _shensi_post("/reports/daily/regenerate")
-                summary = result.get("summary", "")
-                reply = summary or "今日日报已生成，可以在慎思知识库中查看。"
-            except RuntimeError:
-                reply = "生成日报失败，请稍后重试。"
-            try:
-                feishu_client.reply_text(message_id=message_id, text=reply)
-            except FeishuClientError:
-                pass
-            return
-
-        if intent == "review_tasks":
-            try:
-                result = _shensi_get("/reviews/today")
-                items = result.get("items") if isinstance(result, dict) else []
-                reply = format_review_items(items)
-            except RuntimeError:
-                reply = "获取复习任务失败，请稍后重试。"
-            try:
-                feishu_client.reply_text(message_id=message_id, text=reply)
-            except FeishuClientError:
-                pass
-            return
-
         if intent == "help":
             try:
                 feishu_client.reply_text(
                     message_id=message_id,
-                    text="发送图片自动分析。\n命令：慎思分析 / 今日日报 / 复习任务 / 确认入库 / 丢弃 / 帮助",
+                    text="发送图片自动分析。\n命令：慎思分析 / 确认入库 / 丢弃 / 帮助\n日报、复习任务、讲题请找「慎思辅导机器人」。",
                 )
             except FeishuClientError:
                 pass
@@ -361,7 +335,7 @@ def _handle_message_router(
         try:
             feishu_client.reply_text(
                 message_id=message_id,
-                text="我现在只处理作业图片、慎思分析、确认入库、丢弃和帮助。请发送作业图片，或输入「帮助」查看用法。",
+                text="我现在只处理作业图片、慎思分析、确认入库、丢弃和帮助。日报、复习任务、讲题请找「慎思辅导机器人」。",
             )
         except FeishuClientError:
             pass

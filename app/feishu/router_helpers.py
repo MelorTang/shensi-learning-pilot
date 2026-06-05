@@ -22,8 +22,6 @@ def classify_intent(text: str) -> str:
       'shensi_analyze' — user wants analysis
       'confirm'        — user wants to confirm the latest pending result
       'discard'        — user wants to discard the latest pending result
-      'daily_report'   — user wants daily report
-      'review_tasks'   — user wants review tasks
       'help'           — user wants help
       'unknown'        — no recognised intent
     """
@@ -33,20 +31,6 @@ def classify_intent(text: str) -> str:
 
     if "慎思分析" in cleaned or "提交这张错题" in cleaned or "分析刚才" in cleaned:
         return "shensi_analyze"
-
-    # daily report
-    if any(
-        phrase in cleaned
-        for phrase in ("今日日报", "今天日报", "今日总结")
-    ) or cleaned == "日报":
-        return "daily_report"
-
-    # review tasks
-    if any(
-        phrase in cleaned
-        for phrase in ("复习任务", "今日复习", "今天复习", "待复习")
-    ):
-        return "review_tasks"
 
     if cleaned == "帮助" or cleaned.startswith("帮助"):
         return "help"

@@ -20,21 +20,43 @@ never ingests, confirms, or discards mistakes.
 - 不编造学生历史数据——API 查到了才可以说
 - 默认中文回复
 
-## Allowed APIs (read-only)
+## Allowed APIs
 
-| Endpoint | Purpose |
-|----------|---------|
-| `GET http://127.0.0.1:8000/hermes/stats?days=14` | 近期统计：薄弱知识点、错误类型 |
-| `GET http://127.0.0.1:8000/reviews/today` | 今日待复习任务 |
-| `GET http://127.0.0.1:8000/reports` | 日报/周报列表 |
-| `GET http://127.0.0.1:8000/mistakes?status=confirmed` | 已确认的错题列表 |
-| `GET http://127.0.0.1:8000/hermes/concepts/{concept_name}/mistakes` | 某知识点的所有错题 |
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `http://127.0.0.1:8000/hermes/stats?days=14` | GET | 近期统计：薄弱知识点、错误类型 |
+| `http://127.0.0.1:8000/reviews/today` | GET | 今日待复习任务 |
+| `http://127.0.0.1:8000/reports` | GET | 日报/周报列表 |
+| `http://127.0.0.1:8000/mistakes?status=confirmed` | GET | 已确认的错题列表 |
+| `http://127.0.0.1:8000/hermes/concepts/{concept_name}/mistakes` | GET | 某知识点的所有错题 |
+| `http://127.0.0.1:8000/reports/daily/regenerate` | POST (no body) | 生成今日日报并返回 summary |
 
 ## When to Query
 
 When the user asks about recent performance, weak concepts, review tasks, or
 "为什么这个知识点总错", query the relevant API first.  Reply with trends only:
 which concepts are weak, which error types are frequent, what reviews are due.
+
+### Daily Report (今日日报)
+
+When the user says "今日日报", "日报", "今天日报", or "今日总结":
+
+1. Call `POST http://127.0.0.1:8000/reports/daily/regenerate`.
+2. Summarise the returned data in natural Chinese:
+   - How many new confirmed mistakes today
+   - How many reviews due tomorrow
+   - Which subjects are most active
+3. If there are no mistakes today, say so honestly.
+4. Keep it under 4-5 short sentences.
+
+### Review Tasks (复习任务)
+
+When the user says "复习任务", "今日复习", "今天复习", or "待复习":
+
+1. Call `GET http://127.0.0.1:8000/reviews/today`.
+2. List up to 5 review items with: title, subject, review type (D+1/D+3/D+7).
+3. If there are no reviews, reply: "今天暂无复习任务。"
+4. After listing, suggest one concrete action: pick the earliest review and do it first.
 
 For general knowledge questions ("什么是二次函数", "斜率公式怎么来的"), you can
 explain directly without querying.

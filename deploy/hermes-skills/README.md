@@ -29,11 +29,11 @@ skills are picked up.
 
 | 机器人 | Skill | 职责 |
 |--------|-------|------|
-| 慎思错题机器人 | `shensi-antigravity` | 图片分析、Antigravity 识图、错题入库 |
-| 慎思辅导机器人 | `shensi-tutor` | 学习辅导、复盘解释、只读查询 Shensi |
+| 慎思错题机器人 | `shensi-antigravity`（历史/备用） | 图片分析、Antigravity 识图、错题入库 |
+| 慎思辅导机器人 | `shensi-tutor` | 日报、复习任务、讲题、学习建议、查询统计 |
 
-- 辅导机器人**不要**安装 shensi-antigravity skill，避免它接管错题入库流程。
 - 慎思错题机器人当前推荐走 **Shensi Direct Router**（`run_feishu_ws.py --router`），不使用 Hermes LLM。
+- 辅导机器人**不要**安装 shensi-antigravity skill，避免它接管错题入库流程。
 
 ## Purpose
 

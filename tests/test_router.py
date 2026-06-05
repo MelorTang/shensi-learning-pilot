@@ -39,27 +39,16 @@ class TestClassifyIntent:
     def test_correction_is_unknown(self) -> None:
         assert classify_intent("第三题其实是对的") == "unknown"
 
-    def test_daily_report_exact(self) -> None:
-        assert classify_intent("今日日报") == "daily_report"
+    # daily report / review tasks moved to tutor bot → router returns unknown
+    def test_daily_report_is_unknown(self) -> None:
+        assert classify_intent("今日日报") == "unknown"
+        assert classify_intent("日报") == "unknown"
+        assert classify_intent("今日总结") == "unknown"
 
-    def test_daily_report_short(self) -> None:
-        assert classify_intent("日报") == "daily_report"
-
-    def test_daily_report_variant(self) -> None:
-        assert classify_intent("今天日报") == "daily_report"
-        assert classify_intent("今日总结") == "daily_report"
-
-    def test_review_tasks_exact(self) -> None:
-        assert classify_intent("复习任务") == "review_tasks"
-
-    def test_review_tasks_variant(self) -> None:
-        assert classify_intent("今日复习") == "review_tasks"
-        assert classify_intent("今天复习") == "review_tasks"
-        assert classify_intent("待复习") == "review_tasks"
-
-    def test_daily_report_not_false_positive(self) -> None:
-        # "日报" alone is the trigger, "日报吗" is not
-        assert classify_intent("有日报吗") == "unknown"
+    def test_review_tasks_is_unknown(self) -> None:
+        assert classify_intent("复习任务") == "unknown"
+        assert classify_intent("今日复习") == "unknown"
+        assert classify_intent("待复习") == "unknown"
 
 
 class TestFormatReviewItems:
