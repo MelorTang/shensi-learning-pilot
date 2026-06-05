@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.config import Settings
 from app.feishu.client import FeishuClient, FeishuClientError
-from app.feishu.router_helpers import classify_intent, index_image_path
+from app.feishu.router_helpers import classify_intent, index_image_path, resolve_indexed_image
 from app.services.workflow_service import MistakeWorkflowService
 
 
@@ -157,26 +157,13 @@ def _download_and_index_image(
     return cached
 
 
-def _resolve_image_for_analysis(chat_id: str, sender_id: str) -> Path | None:
-    """Find the best image for analysis: index first, then newest cache file."""
-    # 1) Indexed image
+def _resolve_indexed_image_for_analysis(chat_id: str, sender_id: str) -> Path | None:
+    """Look up the same-chat same-sender image index.  No global-cache fallback."""
     index_target = index_image_path(chat_id, sender_id, index_dir=_INDEX_DIR)
     if index_target.exists():
         indexed = index_target.read_text().strip()
         if indexed and Path(indexed).exists():
             return Path(indexed)
-
-    # 2) Newest file in image cache
-    if not _IMAGE_CACHE.is_dir():
-        return None
-    candidates = sorted(
-        _IMAGE_CACHE.glob("*"),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )
-    for candidate in candidates:
-        if candidate.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}:
-            return candidate
     return None
 
 
@@ -265,17 +252,12 @@ def _handle_message_router(
             )
         if cached:
             _spawn_analysis(chat_id, sender_id, cached)
+            reply_text = "已收到图片，正在分析，约40秒后发确认卡片。"
         else:
-            # No download — still try to trigger with whatever image is cached
-            fallback = _resolve_image_for_analysis(chat_id, sender_id)
-            if fallback:
-                _spawn_analysis(chat_id, sender_id, fallback)
+            reply_text = "图片已收到，但下载失败，请重发一次。"
 
         try:
-            feishu_client.reply_text(
-                message_id=message_id,
-                text="已收到图片，正在分析，约40秒后发确认卡片。",
-            )
+            feishu_client.reply_text(message_id=message_id, text=reply_text)
         except FeishuClientError:
             pass
         return
@@ -286,7 +268,7 @@ def _handle_message_router(
         intent = classify_intent(text)
 
         if intent == "shensi_analyze":
-            image = _resolve_image_for_analysis(chat_id, sender_id)
+            image = _resolve_indexed_image_for_analysis(chat_id, sender_id)
             if image:
                 _spawn_analysis(chat_id, sender_id, image)
                 reply = "正在分析这张错题，完成后我会发确认卡片。"

@@ -70,3 +70,24 @@ def index_image_path(
     safe_chat = _safe_key(chat_id)
     safe_sender = _safe_key(sender_id)
     return base / safe_chat / f"{safe_sender}.path"
+
+
+def resolve_indexed_image(
+    chat_id: str,
+    sender_id: str,
+    *,
+    index_dir: str | Path | None = None,
+) -> Path | None:
+    """Look up the chat+sender index and return the cached image path.
+
+    Returns None when the index file is missing or the referenced image
+    no longer exists.  Does NOT fall back to a global cache.
+    """
+    target = index_image_path(chat_id, sender_id, index_dir=index_dir)
+    if not target.exists():
+        return None
+    raw = target.read_text().strip()
+    if not raw:
+        return None
+    path = Path(raw)
+    return path if path.exists() else None

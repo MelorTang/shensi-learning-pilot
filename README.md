@@ -377,7 +377,7 @@ handles `im.message.receive_v1` with fixed keyword matching — no LLM, no Herme
 确认入库 / 丢弃 → <1s → POST Shensi API
 ```
 
-**Start the router:**
+**Start the router locally:**
 
 ```powershell
 python scripts/run_feishu_ws.py --router
@@ -387,16 +387,20 @@ python scripts/run_feishu_ws.py --router
 
 ```bash
 sudo cp deploy/systemd/shensi-router.service /etc/systemd/system/shensi-router.service
-# or as a user service:
-systemctl --user enable shensi-router.service
-systemctl --user start shensi-router.service
+sudo systemctl daemon-reload
+sudo systemctl enable shensi-router
+sudo systemctl start shensi-router
 ```
 
 The template is at `deploy/systemd/shensi-router.service`.
 
-When the direct router is running, **disable Hermes' `im.message.receive_v1`
-subscription** to avoid duplicate processing.  Hermes can still handle free-form
-conversation via a separate bot or slash commands.
+**When the Shensi Direct Router is active, stop Hermes** to prevent duplicate
+`im.message.receive_v1` processing on the same Feishu bot:
+
+```bash
+systemctl --user stop hermes-gateway
+systemctl --user disable hermes-gateway
+```
 
 ### Option B: Hermes Agent Gateway
 
@@ -555,10 +559,12 @@ ln -sf /home/admin/apps/shensi-learning-pilot/scripts/cloud/shensi-feishu-analys
 ln -sf /home/admin/apps/shensi-learning-pilot/scripts/cloud/shensi-antigravity-submit /home/admin/bin/shensi-antigravity-submit
 ln -sf /home/admin/apps/shensi-learning-pilot/scripts/cloud/shensi-antigravity-vision /home/admin/bin/shensi-antigravity-vision
 sudo cp deploy/systemd/shensi-api.service /etc/systemd/system/shensi-api.service
+sudo cp deploy/systemd/shensi-router.service /etc/systemd/system/shensi-router.service
 sudo systemctl daemon-reload
 sudo systemctl enable shensi-api
 sudo systemctl restart shensi-api
-systemctl --user restart shensi-feishu-card
+sudo systemctl restart shensi-router
+systemctl --user stop hermes-gateway 2>/dev/null; true
 curl http://127.0.0.1:8000/health
 ```
 

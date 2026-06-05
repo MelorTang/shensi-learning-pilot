@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-import tempfile
 
-from app.feishu.router_helpers import classify_intent, index_image_path
+from app.feishu.router_helpers import (
+    classify_intent,
+    index_image_path,
+    resolve_indexed_image,
+)
 
 
 class TestClassifyIntent:
@@ -57,3 +60,37 @@ class TestIndexImagePath:
     def test_default_index_dir(self) -> None:
         got = index_image_path("chat", "user")
         assert ".hermes" in str(got) or "shensi_image_index" in str(got)
+
+
+class TestResolveIndexedImage:
+    def test_returns_none_when_index_missing(self, tmp_path: Path) -> None:
+        assert resolve_indexed_image("chat", "user", index_dir=tmp_path) is None
+
+    def test_returns_none_when_indexed_image_deleted(self, tmp_path: Path) -> None:
+        index_target = index_image_path("chat", "user", index_dir=tmp_path)
+        index_target.parent.mkdir(parents=True, exist_ok=True)
+        index_target.write_text("/nonexistent/img.jpg")
+        assert resolve_indexed_image("chat", "user", index_dir=tmp_path) is None
+
+    def test_returns_path_when_indexed_image_exists(self, tmp_path: Path) -> None:
+        img = tmp_path / "real.jpg"
+        img.write_text("fake jpeg")
+
+        index_target = index_image_path("chat", "user", index_dir=tmp_path)
+        index_target.parent.mkdir(parents=True, exist_ok=True)
+        index_target.write_text(str(img))
+
+        got = resolve_indexed_image("chat", "user", index_dir=tmp_path)
+        assert got == img
+
+    def test_no_global_cache_fallback(self, tmp_path: Path) -> None:
+        """Even with images in a sibling dir, non-indexed chat returns None."""
+        other_img = tmp_path / "other.jpg"
+        other_img.write_text("other")
+        # Write an index for a different chat
+        other_index = index_image_path("other_chat", "user", index_dir=tmp_path)
+        other_index.parent.mkdir(parents=True, exist_ok=True)
+        other_index.write_text(str(other_img))
+
+        # Our chat has no index → None (no fallback to other_chat's image)
+        assert resolve_indexed_image("our_chat", "user", index_dir=tmp_path) is None
