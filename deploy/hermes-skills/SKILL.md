@@ -13,8 +13,8 @@
 ## What this file used to do
 
 - Route Feishu images through Antigravity/Gemini via shell wrappers
-- Handle `慎思分析`, `今日日报`, `复习任务`, parent corrections
-- Call `shensi-pending-modify` for correction text
+- Handle `慎思分析`, `今日日报`, `复习任务`
+- Support parent corrections (now removed — discard + re-analyze instead)
 
 All of this has been replaced:
 
