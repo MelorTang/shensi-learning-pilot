@@ -402,6 +402,25 @@ systemctl --user stop hermes-gateway
 systemctl --user disable hermes-gateway
 ```
 
+### Shensi Tutor Bot (Hermes + 只读查询)
+
+A second Feishu bot for study coaching, mistake review, and parent guidance.
+It queries Shensi data **read-only** — never ingests images or confirms mistakes.
+
+Install the skill:
+
+```bash
+mkdir -p ~/.hermes/skills/shensi-tutor
+cp /home/admin/apps/shensi-learning-pilot/deploy/hermes-skills/shensi-tutor/SKILL.md \
+  ~/.hermes/skills/shensi-tutor/SKILL.md
+systemctl --user restart hermes-gateway
+```
+
+- **慎思错题机器人**: shensi-router (no LLM) — image analysis, confirm/discard
+- **慎思辅导机器人**: Hermes + shensi-tutor skill — stats, reviews, coaching
+- Do NOT install shensi-antigravity on the tutor bot — it must not take over
+  the mistake-ingest flow
+
 ### Option B: Hermes Agent Gateway
 
 Configure Hermes Agent's Feishu / Lark gateway, then have Hermes call `POST /ingest/mistake-image`.
