@@ -25,7 +25,7 @@ def test_settings_accepts_hermes_feishu_env_aliases(monkeypatch):
     monkeypatch.setenv("FEISHU_APP_ID", "cli_from_hermes")
     monkeypatch.setenv("FEISHU_APP_SECRET", "secret_from_hermes")
 
-    settings = Settings.load()
+    settings = Settings.load(load_dotenv=False)
 
     assert settings.feishu_app_id == "cli_from_hermes"
     assert settings.feishu_app_secret == "secret_from_hermes"

@@ -63,8 +63,9 @@ class Settings:
     timezone: str = "Asia/Shanghai"
 
     @classmethod
-    def load(cls) -> "Settings":
-        _load_dotenv(BASE_DIR / ".env")
+    def load(cls, *, load_dotenv: bool = True) -> "Settings":
+        if load_dotenv:
+            _load_dotenv(BASE_DIR / ".env")
 
         return cls(
             env=os.getenv("SHENSI_ENV", "local"),
