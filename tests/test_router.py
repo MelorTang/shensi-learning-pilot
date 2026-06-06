@@ -4,10 +4,23 @@ from pathlib import Path
 
 from app.feishu.router_helpers import (
     classify_intent,
+    has_mention,
     index_image_path,
     resolve_indexed_image,
     strip_mention,
 )
+
+
+class TestHasMention:
+    def test_with_mention(self) -> None:
+        assert has_mention("@机器人 帮助") is True
+
+    def test_without_mention(self) -> None:
+        assert has_mention("帮助") is False
+        assert has_mention("慎思分析") is False
+
+    def test_empty(self) -> None:
+        assert has_mention("") is False
 
 
 class TestStripMention:

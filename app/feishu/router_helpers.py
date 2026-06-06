@@ -28,6 +28,11 @@ def strip_mention(text: str) -> str:
     return _MENTION_RE.sub("", text).strip()
 
 
+def has_mention(text: str) -> bool:
+    """Return True if the text contains an @-mention."""
+    return bool(_MENTION_RE.search(text))
+
+
 def classify_intent(text: str) -> str:
     """Classify a user text message into a router intent.
 

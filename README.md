@@ -406,8 +406,14 @@ systemctl --user restart hermes-gateway
 Both bots require these settings in the Feishu Developer Console:
 
 **Permissions (「权限管理」):**
-- Enable `im:message` (receive and send messages)
-- Enable `im:resource` (download message resources, for images)
+- `im:message.p2p_msg:readonly` — receive DM messages
+- `im:message.group_at_msg:readonly` — receive group @-mention messages
+- `im:message:send_as_bot` — send messages as the bot
+- `im:resource` — download message resources (images)
+
+> Do **not** enable group all-message read permissions.  Group messages
+> without @-mentions are silently ignored (logged with
+> `ignored_reason=group_without_mention`).
 
 **Event subscriptions (「事件订阅」):**
 - Subscribe to `im.message.receive_v1`
@@ -417,14 +423,13 @@ Both bots require these settings in the Feishu Developer Console:
 **Bot settings (「应用功能」→「机器人」):**
 - Enable bot capability
 - DM: all users can message the bot
-- Group: @-mention triggers the bot (**do not** enable full group-message access)
+- Group: @-mention triggers the bot
 
 **Publishing (「应用发布」):**
 - Create and publish a version so non-admin users can interact
 
-> Group chats: the bot must be added to the group and @-mentioned to receive
-> messages.  The router strips @-mention text before intent matching, so
-> `@慎思错题机器人 帮助` is handled the same as `帮助`.
+> Group chats: the bot must be added to the group and @-mentioned.  The
+> router strips @-mention text before intent matching.
 
 ### Option B: Hermes Agent Gateway (Legacy)
 

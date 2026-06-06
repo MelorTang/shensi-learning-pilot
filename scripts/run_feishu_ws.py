@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.config import Settings
 from app.feishu.client import FeishuClient, FeishuClientError
-from app.feishu.router_helpers import classify_intent, index_image_path, resolve_indexed_image, strip_mention
+from app.feishu.router_helpers import classify_intent, has_mention, index_image_path, resolve_indexed_image, strip_mention
 from app.services.workflow_service import MistakeWorkflowService
 
 
@@ -294,6 +294,19 @@ def _handle_message_router(
 
     # ── Text ───────────────────────────────────────────────────
     if message_type == "text":
+        chat_type = msg.get("chat_type", "")
+        raw_text = msg["text"]
+        is_group = chat_type in ("group", "supergroup")
+
+        if is_group and not has_mention(raw_text):
+            print(
+                f"router_msg message_id={message_id} "
+                f"ignored_reason=group_without_mention "
+                f"chat_type={chat_type}",
+                flush=True,
+            )
+            return
+
         intent = text_intent
 
         if intent == "shensi_analyze":
