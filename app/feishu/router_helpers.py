@@ -15,6 +15,19 @@ import re
 # Intent classifier
 # ---------------------------------------------------------------------------
 
+# Feishu @-mention pattern: @user_id or @机器人名称
+_MENTION_RE = re.compile(r"@\S+")
+
+
+def strip_mention(text: str) -> str:
+    """Remove @-mentions from a Feishu text message.
+
+    ``"@慎思错题机器人 帮助"`` → ``"帮助"``
+    ``"@_user_1 确认入库"`` → ``"确认入库"``
+    """
+    return _MENTION_RE.sub("", text).strip()
+
+
 def classify_intent(text: str) -> str:
     """Classify a user text message into a router intent.
 

@@ -401,7 +401,32 @@ systemctl --user restart hermes-gateway
 - Do NOT install shensi-antigravity on the tutor bot — it must not take over
   the mistake-ingest flow
 
-### Option B: Hermes Agent Gateway
+### Feishu App Configuration
+
+Both bots require these settings in the Feishu Developer Console:
+
+**Permissions (「权限管理」):**
+- Enable `im:message` (receive and send messages)
+- Enable `im:resource` (download message resources, for images)
+
+**Event subscriptions (「事件订阅」):**
+- Subscribe to `im.message.receive_v1`
+- Subscribe to `card.action.trigger`
+- Connection mode: WebSocket (长连接)
+
+**Bot settings (「应用功能」→「机器人」):**
+- Enable bot capability
+- DM: all users can message the bot
+- Group: @-mention triggers the bot (**do not** enable full group-message access)
+
+**Publishing (「应用发布」):**
+- Create and publish a version so non-admin users can interact
+
+> Group chats: the bot must be added to the group and @-mentioned to receive
+> messages.  The router strips @-mention text before intent matching, so
+> `@慎思错题机器人 帮助` is handled the same as `帮助`.
+
+### Option B: Hermes Agent Gateway (Legacy)
 
 Configure Hermes Agent's Feishu / Lark gateway, then have Hermes call `POST /ingest/mistake-image`.
 

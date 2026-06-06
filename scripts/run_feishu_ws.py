@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.config import Settings
 from app.feishu.client import FeishuClient, FeishuClientError
-from app.feishu.router_helpers import classify_intent, index_image_path, resolve_indexed_image
+from app.feishu.router_helpers import classify_intent, index_image_path, resolve_indexed_image, strip_mention
 from app.services.workflow_service import MistakeWorkflowService
 
 
@@ -92,6 +92,7 @@ def _parse_router_message(raw: dict[str, Any]) -> dict[str, Any]:
         or ""
     )
     chat_id: str = message.get("chat_id") or raw.get("chat_id") or ""
+    chat_type: str = message.get("chat_type") or event.get("chat_type") or raw.get("chat_type") or ""
     sender_id: str = (
         sender.get("sender_id", {}).get("user_id")
         or sender.get("sender_id", {}).get("open_id")
@@ -111,6 +112,7 @@ def _parse_router_message(raw: dict[str, Any]) -> dict[str, Any]:
     return {
         "message_id": str(message_id),
         "chat_id": str(chat_id),
+        "chat_type": str(chat_type),
         "sender_id": str(sender_id),
         "message_type": str(message_type),
         "text": str(text),
@@ -253,6 +255,23 @@ def _handle_message_router(
     if not message_id:
         return
 
+    # Structured log for every inbound message
+    log_parts = [
+        f"router_msg message_id={message_id}",
+        f"chat_id={chat_id}",
+        f"chat_type={msg.get('chat_type', '')}",
+        f"sender_id={sender_id}",
+        f"message_type={message_type}",
+    ]
+    if message_type == "image":
+        log_parts.append(f"has_image_key={bool(msg['image_key'])}")
+    elif message_type == "text":
+        cleaned_text = strip_mention(msg["text"])
+        text_intent = classify_intent(cleaned_text)
+        log_parts.append(f"intent={text_intent}")
+        log_parts.append(f"text_len={len(msg['text'])}")
+    print(" ".join(log_parts), flush=True)
+
     # ── Image ──────────────────────────────────────────────────
     if message_type == "image":
         image_key = msg["image_key"]
@@ -275,8 +294,7 @@ def _handle_message_router(
 
     # ── Text ───────────────────────────────────────────────────
     if message_type == "text":
-        text = msg["text"]
-        intent = classify_intent(text)
+        intent = text_intent
 
         if intent == "shensi_analyze":
             image = _resolve_indexed_image_for_analysis(chat_id, sender_id)

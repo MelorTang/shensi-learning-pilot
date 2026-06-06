@@ -6,7 +6,32 @@ from app.feishu.router_helpers import (
     classify_intent,
     index_image_path,
     resolve_indexed_image,
+    strip_mention,
 )
+
+
+class TestStripMention:
+    def test_removes_at_mention_prefix(self) -> None:
+        assert strip_mention("@慎思错题机器人 帮助") == "帮助"
+
+    def test_removes_at_user_id(self) -> None:
+        assert strip_mention("@_user_1 确认入库") == "确认入库"
+
+    def test_no_mention_unchanged(self) -> None:
+        assert strip_mention("帮助") == "帮助"
+        assert strip_mention("慎思分析") == "慎思分析"
+
+    def test_multiple_mentions(self) -> None:
+        assert strip_mention("@bot1 @bot2 丢弃") == "丢弃"
+
+    def test_only_mention(self) -> None:
+        assert strip_mention("@机器人") == ""
+
+    def test_intent_with_mention(self) -> None:
+        assert classify_intent(strip_mention("@慎思错题机器人 帮助")) == "help"
+        assert classify_intent(strip_mention("@_user_1 慎思分析")) == "shensi_analyze"
+        assert classify_intent(strip_mention("@bot 确认入库")) == "confirm"
+        assert classify_intent(strip_mention("@bot 日报")) == "unknown"
 
 
 class TestClassifyIntent:
